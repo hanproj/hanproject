@@ -7,10 +7,24 @@
 #   to try and recreate what Johann-Mattis List did in Using Network Models to Analyze
 #   Old Chinese Rhyme Data. I was working off the unpublished 2016 version of the paper.
 #   So, the code here is exploratory, not designed.
+#
+# IMPORTANT NOTE:
+#  - the get_X_dir() functions are written to work on my machine, so anyone wanting to
+#    run this code will have to modify these functions:
+#    get_hanproject_dir()
+#    get_soas_data_dir()
+#    get_mattis_github_data_dir()
+#    get_wang1980_data_dir()
+
 import os
 
-from soas_utils import readlines_of_utf8_file
+from py3_outlier_utils import readlines_of_utf8_file
 from poepy import Poems
+import networkx as nx
+from py3_outlier_utils import append_line_to_utf8_file
+import datetime
+from test_is_hanzi import is_kana_letter
+from py3_middle_chinese import get_mc_data_for_char
 
 #globals
 b92_label_dict = {}
@@ -96,10 +110,8 @@ def readin_b92_label_dict():
     data = readin_baxter1992_rhyme_data()
     label_list = data[0]
     label_list = label_list.split('\t')
-    #data = data[1:len(data)]
     for inc in range(0, len(label_list), 1):
         b92_label_dict[inc] = label_list[inc]
-        #print('data[' + str(inc) + '] = ' + label_list[inc])
 
 def print_baxter1992_rhyme_data_with_labels():
     funct_name = 'print_baxter1992_rhyme_data_with_labels()'
@@ -115,9 +127,6 @@ def print_baxter1992_rhyme_data_with_labels():
             msg += b92_label_dict[inc] + ': ' + d[inc] + ', '
         msg = msg[0:len(msg)-2]
         print(msg)
-#    for d in data:
-#        print(d)
-
 
 # data:
 #   poem number (i.e., ordinal representing its position in the 《詩經》
@@ -138,19 +147,6 @@ def print_baxter1992_rhyme_data_with_labels():
 class b92_shijing_poem:
     def __init__(self):
         x = 1
-
-#def test_readin_baxter_1992_shijing_rhyme_data():
-    #funct_name = 'test_readin_baxter_1992_shijing_rhyme_data()'
-    #readin_baxter_1992_shijing_rhyme_data()
-
-# NOTE: the max number of rhyme groups in any poem is 'i' (9)
-#def readin_baxter_1992_shijing_rhyme_data():
-#    funct_name = 'readin_baxter_1992_shijing_rhyme_data()'
-#    input_file = os.path.join(get_soas_data_dir(), u'shijing-rhymes-baxter.tsv')
-#    data_list = readlines_of_utf8_file(input_file)
-#    for dl in data_list:
-#        print(dl)
-
 
 def test_readin_wang1980_rhyme_data():
     funct_name = 'test_readin_wang1980_rhyme_data()'
@@ -230,9 +226,7 @@ def readin_shijing_num2name_dict():
         poem_name = d[2]
         if poem_num not in sj_num2name_dict:
             sj_num2name_dict[poem_num] = poem_name
-#sj_line2poem_dict
-# for baxter 1992 data
-    #readin_shijing_num2name_dict()
+
 def readin_shijing_line2poem_dict():
     funct_name = 'readin_shijing_line2poem_dict()'
     global sj_line2poem_dict
@@ -294,9 +288,6 @@ def is_line_a_rhyming_line(line):
     if '?' in line:
         return retval
     type_list = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i']
-    #is_line_a_rhyming_line
-    #if any(ext in url_string for ext in extensionsToCheck):
-    #    print(url_string)
     if any(t in line for t in type_list):
         retval = True
     return retval
@@ -325,15 +316,33 @@ class rnetwork: # rhyme network
     def get_node_list(self):
         return self.node_dict.keys()
 
-    def add_node(self, zi, poem_stanza_num, raw_line):
+    def get_node_weight(self, zi):
+        retval = 0
         if zi in self.node_dict:
+            retval = self.node_dict[zi].get_node_weight()
+        return retval
+
+    def add_node(self, zi, poem_stanza_num, raw_line):
+        if zi.isdigit():
+            return
+        if is_kana_letter(zi):
+            return
+        zi = remove_unwanted_chars_from_str(zi)
+        if not zi.strip():
+            return
+        if zi in self.node_dict:
+            self.node_dict[zi].increment_node_weight()
             self.node_dict[zi].add_an_occurrence(poem_stanza_num)
             return
         if zi not in self.node_dict:
             self.node_dict[zi] = rnode(zi, poem_stanza_num, raw_line)
 
-    def add_edge(self, first_rhyme_word, sec_rhyme_word, num_rhymes_in_stanza, poem_stanza_num):
+    def add_edge(self, first_rhyme_word, sec_rhyme_word, num_rhymes_in_stanza, poem_stanza_num, enforce_ending_similarity=True):
         #NOTE: could change this so that it just adds the NODEs, but they're supposed to be there already
+        is_verbose = False
+        if not first_rhyme_word.strip() or not sec_rhyme_word.strip():
+            return
+
         if first_rhyme_word not in self.node_dict:
             print('rnetwork::add_edge() ERROR: ' + first_rhyme_word + ' NOT in network!')
             return
@@ -344,6 +353,12 @@ class rnetwork: # rhyme network
         one_repeat = self.node_dict[first_rhyme_word].add_edge(sec_rhyme_word, num_rhymes_in_stanza, poem_stanza_num)
         self.same_zi_multi_rhyme_cnt += one_repeat
         self.node_dict[sec_rhyme_word].add_edge(first_rhyme_word, num_rhymes_in_stanza, poem_stanza_num)
+
+    def get_edge_weight(self, zi_a, zi_b):
+        retval = 0
+        if zi_a in self.node_dict:
+            retval = self.node_dict[zi_a].get_edge_weight(zi_b)
+        return retval
 
     def get_num_times_two_zi_rhymed_more_than_once_in_same_stanza(self):
         return self.same_zi_multi_rhyme_cnt # over the whole shijing (or at least up to where we are now)
@@ -383,16 +398,110 @@ class rnetwork: # rhyme network
             print(zi_a)
             self.node_dict[zi_a].print_edges()
 
-    def print_all_nodes_n_edges(self):
+    def print_all_nodes_n_edges(self, is_verbose=False):
+        retval = []
         for zi_a in self.node_dict:
-            self.node_dict[zi_a].print_node()
+            node_data = self.node_dict[zi_a].print_node(is_verbose)
+            retval += node_data
+        return retval
+
+    def get_networkx_graph_of_rhyme_network(self, print_data=False):
+        funct_name = 'get_networkx_graph_of_rhyme_network()'
+        print('Entering ' + funct_name + '...')
+        network_data = self.print_all_nodes_n_edges(is_verbose=False)
+        retval = nx.Graph()
+        current_node = ''
+        id2edge_dict = {}
+        for nd in network_data:
+            if 'Node=' in nd:
+                node = nd.split('\t')[0].replace('Node=','')
+                node_weight = self.get_node_weight(node)
+                retval.add_node(node, weight=node_weight)
+                if print_data:
+                    print('NODE=' + node + ', WEIGHT=' + str(node_weight))
+            else:
+                nd = nd.split('\t')
+                zi_a = nd[0]
+                zi_b = nd[1]
+                edge_weight = nd[2]
+                unique_id = nd[3]
+
+                if unique_id not in id2edge_dict:
+                    id2edge_dict[unique_id] = []
+                # if the edge isn't already accounted for, then account for it
+                if (zi_a, zi_b) not in id2edge_dict[unique_id]:
+                    retval.add_edge(zi_a, zi_b, weight=edge_weight)
+                    x = 1 #add edge
+                id2edge_dict[unique_id].append((zi_a, zi_b))
+                id2edge_dict[unique_id].append((zi_b, zi_a))
+                if print_data:
+                    print('\t' + 'EDGE=' + zi_a + ', ' + zi_b + ', weight=' + edge_weight + ',ID=' + unique_id)
+        print('\tDone.')
+        return retval
+
+    def get_infomap_linked_list_of_rhyme_network(self, print_data=False):
+        funct_name = 'get_infomap_linked_list_of_rhyme_network()'
+        print('Entering ' + funct_name + '...')
+        network_data = self.print_all_nodes_n_edges(is_verbose=False)
+        retval = nx.Graph()
+        current_node = ''
+        id2edge_dict = {}
+        node_inc = 0
+        output_file = 'linked_list' + get_timestamp_for_filename() + '.txt'
+        if os.path.isfile(output_file):
+            os.remove(output_file)
+        append_line_to_utf8_file(output_file, '# A network in Pajek format')
+        append_line_to_utf8_file(output_file, '*Vertices in ' + str(self.get_num_nodes()))
+        print('# A network in Pajek format')
+        print('*Vertices in ' + str(self.get_num_nodes()))
+        zi2node_dict = {}
+        for nd in network_data:
+            if 'Node=' in nd:
+                node_inc += 1
+                node = nd.split('\t')[0].replace('Node=', '')
+                node_weight = self.get_node_weight(node)
+                pmsg = str(node_inc) + ' "' + node + '" ' + str(node_weight)
+                if 0:
+                    print(pmsg)
+                append_line_to_utf8_file(output_file, pmsg)
+                if node not in zi2node_dict:
+                    zi2node_dict[node] = 0
+                zi2node_dict[node] = node_inc
+        print('*Edges ' + str(self.get_num_edges()))
+        append_line_to_utf8_file(output_file, '*Edges ' + str(self.get_num_edges()))
+        for nd in network_data:
+            if 'Node=' not in nd:
+                nd = nd.split('\t')
+                zi_a = nd[0]
+                zi_b = nd[1]
+                edge_weight = nd[2]
+                unique_id = nd[3]
+                if 0:
+                    print(str(zi2node_dict[zi_a]) + ' ' + str(zi2node_dict[zi_b]) + str(edge_weight))
+                msg_out = str(zi2node_dict[zi_a]) + ' ' + str(zi2node_dict[zi_b]) + ' ' + str(edge_weight)
+                append_line_to_utf8_file(output_file, msg_out)
+        print('\tDone.')
+        return retval
+
+def remove_unwanted_chars_from_str(tstr):
+    unwanted_chars = [')','>','｛','？',']','「','”','）','■','；','：','\'','、','」', '･', '＊','×','?', '○','】','‐', '］',
+                      '＝','●','々', 'e', ':','』','〕','Ⅱ']
+    #if any(uc in tstr for uc in unwanted_chars):
+    for c in unwanted_chars:
+        if c in tstr:
+            tstr = tstr.replace(c,'')
+    return tstr
+def get_timestamp_for_filename():
+    return datetime.datetime.now().strftime("%A_%d_%B_%Y_%I_%M%p")
 
 class rnode: # rhyme node
     # NOTE: 'poem_stanza_num' should actually be in the form '1.2a'
     #       where:
     #       1 = poem number, 2 = stanza number, a = rhyme type
-    def __init__(self, zi, poem_stanza_num, raw_line):
+    def __init__(self, zi, poem_stanza_num, raw_line, initial_weight=1):
         self.zi = zi
+        self.zi_weight = initial_weight
+        self.delimiter = '\t'
         self.OC = {} # {'baxter1992':'na', 'bns2014':'nˤa', 'panwuyun':'nˤa'}
         self.MC = [] # chars can have more than one reading
         self.poem_n_stanza = poem_stanza_num # first occurrence in the Shijing
@@ -403,6 +512,14 @@ class rnode: # rhyme node
         self.add_an_occurrence(raw_line)
         self.add_oc()
         self.add_mc()
+
+    def get_node_weight(self):
+        return self.get_num_edges()
+        #return self.cnt_num_unique_stanzas()
+        #return self.zi_weight
+
+    def increment_node_weight(self):
+        self.zi_weight += 1
 
     def get_poem_stanza2edge_dict(self):
         funct_name = 'get_poem_stanza2edge_dict()'
@@ -425,21 +542,19 @@ class rnode: # rhyme node
                 retval.append((self.zi, k, tup_inc[pns_pos]))
         return retval
 
-    def print_edges(self): # rnode::
+    def print_edges(self, is_verbose=False): # rnode::
         w_ab_pos = 0
         pns_pos = 1
         stanza2data_dict = {}
         stanza_list = []
+        retval = []
         for k in self.edge_dict:
             try:
                 for tup_inc in self.edge_dict[k]:
-                    #ttup = self.edge_dict[k][tup_inc]
-                    #w_ab = str(ttup[w_ab_pos])
-                    #poem_n_stanza = str(ttup[pns_pos])
                     pns = tup_inc[pns_pos]
                     pmsg = '\t' + self.zi + ' -> ' + k + ', W_ab = ' + str(tup_inc[w_ab_pos])
                     pmsg += '; from = ' + pns
-                    #print(pmsg)
+                    retval.append(self.zi + '\t' + k + '\t' + str(tup_inc[w_ab_pos]) + '\t' + tup_inc[pns_pos])
                     if pns not in stanza_list:
                         stanza_list.append(pns)
                     if pns not in stanza2data_dict:
@@ -449,12 +564,15 @@ class rnode: # rhyme node
                 print(self.zi + ': ERROR with key=' + k)
         for k in stanza2data_dict:
             for innerk in stanza2data_dict[k]:
-                print(innerk)
+                if is_verbose:
+                    print(innerk)
         pmsg2 = '['
         for s in stanza_list:
             pmsg2 += '\'' + s + '\', '
         pmsg2 = pmsg2[0:len(pmsg2)-2] + ']'
-        print(pmsg2)
+        if is_verbose:
+            print(pmsg2)
+        return retval
 
     def cnt_num_unique_stanzas(self):
         pns_list = []
@@ -498,7 +616,6 @@ class rnode: # rhyme node
             for tp in self.edge_dict[zi_b]:
                 if tp[1] == poem_stanza_num: # if zi_a and zi_b have already rhymed once in this stanza, then
                                              # don't count them again
-                    #self.same_zi_multi_rhyme_cnt += 1
                     print('Zi_a & zi_b rhyme more than once in the same stanza (' + poem_stanza_num + ')')
                     return 1
         W_ab = self.calculate_edge_weight(num_rhymes_in_stanza)
@@ -506,9 +623,24 @@ class rnode: # rhyme node
         #self.edge_list.append((zi_b, num_rhymes_in_stanza, poem_stanza_num))
         return 0
 
-    def print_node(self):
-        print('Node = ' + self.zi + ' [' + str(self.cnt_num_unique_stanzas()) + ']')
-        self.print_edges()
+    def get_edge_weight(self, zi_b):
+        retval = 0
+        if zi_b in self.edge_dict:
+            retval = self.edge_dict[zi_b][0][0]
+        return retval
+
+    def get_node_str(self):
+        d = self.delimiter
+        # {zi} + delim + {unique # stanzas} + delim + {node weight}
+        return self.zi + d + str(self.cnt_num_unique_stanzas()) + d + str(self.get_node_weight())
+
+    def print_node(self, is_verbose=False):
+        pmsg = 'Node = ' + self.zi + ' [ # unique stanzas = ' + str(self.cnt_num_unique_stanzas()) + '; weight = '
+        pmsg += str(self.get_node_weight()) + ']'
+        msg = 'Node=' + self.zi + '\t' + str(self.cnt_num_unique_stanzas()) + '\t' + str(self.get_node_weight())
+        edge_list = self.print_edges(is_verbose)
+        edge_list.insert(0, msg) # add node data to beginning of list
+        return edge_list
 
     def add_oc(self):
         self.add_baxter1992_oc()
@@ -606,12 +738,6 @@ class rn_rhyme_pairs:
         oc_list = []
         for k in self.occurrence_dict: # if it's in this dictionary, that means it's occurred multiple times
             # get first occurrence
-            #if not foccurrence:
-            #    kfirst = k.split(':')[0].strip()
-            #    for k_inner in self.rhyme_pair_dict[kfirst]:
-            #        foccurrence = self.rhyme_pair_dict[kfirst][k_inner][0]#.values()
-            #        oc_list.append(foccurrence)
-            #        cnt += 1
             if len(self.occurrence_dict[k]) > num_above:
                 for o in self.occurrence_dict[k]:
                     oc_list.append(o)
@@ -621,11 +747,6 @@ class rn_rhyme_pairs:
             #foccurrence = ''
             oc_list = []
         print(str(cnt) + ' pairs printed.')
-               # print(k + ': ' + ', '.join())
-                #cnt += 1
-
-
-#    def is_first_rhyming_line_in_dict(self, first_line):
 
 def test_get_shijing_stats_for_single_char():
     funct_name = 'test_get_shijing_stats_for_single_char()'
@@ -656,7 +777,6 @@ def get_shijing_stats_for_single_char(tchar):
         #        - add support for counting number of '?' lines skipped (with 'tchar' in it)
 
         d = d.split('\t')
-        #print('rhyme_num = ' + d[rhyme_num_pos])
         rhyme_num = d[rhyme_num_pos]
         rhyme_word = d[rhyme_word_pos]
         raw_line = d[raw_line_pos].replace(' + ','')
@@ -671,7 +791,6 @@ def get_shijing_stats_for_single_char(tchar):
         elif not rhyme_num.strip():
             tchar_non_rhyme.append(raw_line)
     sj_str = '\n'.join(sj_line_list)
-    #sj_str.count(tchar)
     print(tchar + ' occurs as a rhyme ' + str(len(tchar_as_rhyme_list)) + ' times:')
     print('\t' + ', '.join(tchar_as_rhyme_list))
     msg = '['
@@ -683,8 +802,6 @@ def get_shijing_stats_for_single_char(tchar):
     print('\t' + ', '.join(tchar_double_rhyme))
     print(tchar + ' occurs in the 《詩經》 ' + str(sj_str.count(tchar)) + ' times.')
     print(tchar + ' occurs as non-rhyme ' + str(len(tchar_non_rhyme)) + ' times (this doesn\'t take 2x in one line into account).')
-    #print('\n'.join(tchar_non_rhyme))
-    #print(sj_str)
 
 def test_print_shijing_lines_for_given_char():
     funct_name = 'test_print_shijing_lines_for_given_char()'
@@ -730,7 +847,6 @@ def print_shijing_lines_for_given_char(tchar, only_rhyme_words=False):
     data_line_msg = '《詩經》 data for 「' + tchar + '」 (' + rhyme_word_msg + '):'
     print(data_line_msg)
     print('-' * (len(data_line_msg)+5))
-    #raw_shijing_lines =
     raw_shijing_lines, rhyme_line, non_rhyme_line = get_shijing_lines_for_given_char(tchar, only_rhyme_words)
     prefix = ''
     cnt = 1
@@ -839,7 +955,6 @@ def load_shijing_dictionary():
                 for line_k in shijing_dict[poem_k][stanza_k]:
                     print(shijing_dict[poem_k][stanza_k][line_k])
     return shijing_dict
-        #print('poem.stanza# = ' + poem_stanza_num + u', line# = ' + line_num)
 
 def create_network_for_baxter1992_data_3():
     funct_name = 'create_network_for_baxter1992_data_3()'
@@ -1109,7 +1224,7 @@ def create_network_for_baxter1992_data_4():
                 for left_inc in range(0, num_lines_same_type, 1):
                     msg = '-'*40 + '\n'
                     for right_inc in range(left_inc + 1, num_lines_same_type, 1):
-                        rhyme_num = poem_k + '.' + stanza_k + '.' + k
+                        rhyme_num = poem_k + '.' + stanza_k + '.' + k # k = rhyme type (like a, b, c, etc.)
                         msg += s_rhyme_group[left_inc] + ':' + s_rhyme_group[right_inc] + ', num_lines_same_type = '
                         msg += str(num_lines_same_type) + ', poem_stanza_num = ' + rhyme_num
                         if print_debug_msg:
@@ -1267,16 +1382,10 @@ def create_network_for_baxter1992_data_4():
         elif diff_char in poepy_node_set:
             print(diff_char + ' appears in poepy_node_set.')
 
-
-    #rhyme_net.print_num_edges()
-    #print(str(rhyme_n))
-
 def playing_with_poepy_edge_list():
     pp_edge_list = get_poepy_edge_list_for_baxter1992()
     for p in pp_edge_list:
         x = 1
-
-
 
 # here: 'repeating rhyme word' means the same character rhymes on different lines
 def count_num_stanzas_w_repeating_rhyme_word_for_baxter_1992():
@@ -1304,8 +1413,6 @@ def count_num_stanzas_w_repeating_rhyme_word_for_baxter_1992():
                 rhyme_word = get_rhyme_word_from_line(raw_line)
                 rhyme_type = get_rhyme_type_from_line(raw_line)
                 sj_line = get_shijing_line_from_raw_line(raw_line)
-                #if not rhyme_type.strip():
-                #    continue
                 if not is_this_a_rhyming_line(raw_line, use_question_mark_lines):
                     continue
                 if poem_k not in one_zi_multi_lines_dict:
@@ -1500,9 +1607,6 @@ def fancy_indexing():
         print(msg)
 
 def fancy_indexing2():
-    x = 1
-
-    #msg = ''
     nodes2make_edges = ['仔', '仕', '以', '伺', '似', '你']
     num_lines_same_type = len(nodes2make_edges)
     for left_inc in range(0, num_lines_same_type, 1):
@@ -1632,7 +1736,6 @@ def raw_data_dupe_test():
     only_rhyme_words = False
     char2line_dict = get_shijing_lines_for_list_of_chars(char_list, only_rhyme_words)
 #get_single_stanza_data_for_baxter1992_data()
-
     tup0_stanzas = []
     tup1_stanzas = []
     for ttup in dupe_test_list:
@@ -1652,7 +1755,6 @@ def raw_data_dupe_test():
             print('')
             for rs in raw_stanza:
                 print(ttup[0] + ': ' + raw_stanza[rs])
-
 #        print('\n'.join(char2line_dict[ttup[0]]))
         print('')
         print(ttup[1])
@@ -1680,6 +1782,74 @@ def given_list_of_raw_lines_get_list_of_poem_dot_stanza(rline_list):
         l = l.split('\t')
         retval.append(l[poem_dot_stanza_pos])
     return retval
+
+# print: 韋、旗、荒、商、光、同、邦、逸、室、衛、隊、城、生、耕、寧、京、征、平、楚、輔、弼、後
+#   like
+def print_list_of_chars_like_python_list(cline, delim):
+    funct_name = 'print_list_of_chars_like_python_list()'
+    clist = cline.split(delim)
+    retval = ''
+    for c in clist:
+        retval += '\'' + c + '\', '
+    print(retval[0:len(retval)-2])
+    return retval[0:len(retval)-2]
+
+def get_fayin_only(mc_list):
+    fayin = []
+    for m in mc_list:
+        m = m.split(' ')[0]
+        m = m.replace('X', '')
+        m = m.replace('H', '')
+        fayin.append(m)
+    return fayin
+
+def have_compatible_yunwei(zi_a, zi_b, is_verbose=False):
+    funct_name = 'have_compatible_yunwei()'
+    mc_a = get_mc_data_for_char(zi_a)
+    mc_b = get_mc_data_for_char(zi_b)
+    fayin_a = get_fayin_only(mc_a)
+    fayin_b = get_fayin_only(mc_b)
+    nonopen = ['g', 'n', 'm', 'k', 't', 'p']
+    retval = False
+    for f_a in fayin_a:
+        last_f_a = f_a[len(f_a)-1]
+        for f_b in fayin_b:
+            last_f_b = f_b[len(f_b)-1]
+            if last_f_a == 'g' and f_a[len(f_a)-2] == 'n' or last_f_a == 'k': # if f_a == 'ng'
+                if last_f_b == 'g' and f_b[len(f_b)-2] == 'n':
+                    retval = True
+                    if is_verbose:
+                        print(f_a + ' & ' + f_b + ' have compatible endings')
+                    break
+                elif last_f_b == 'k':
+                    retval = True
+                    if is_verbose:
+                        print(f_a + ' & ' + f_b + ' have compatible endings')
+
+                    break
+            elif last_f_a == 'n' or last_f_a == 't': # if f_a == 'n'
+                if last_f_b == 'n' or last_f_b == 't':
+                    retval = True
+                    if is_verbose:
+                        print(f_a + ' & ' + f_b + ' have compatible endings')
+                    break
+            elif last_f_a == 'm' or last_f_b == 'p': # if f_a == 'm'
+                if last_f_b == 'm' or last_f_b == 'p':
+                    retval = True
+                    if is_verbose:
+                        print(f_a + ' & ' + f_b + ' have compatible endings')
+                    break
+            elif last_f_a not in nonopen and last_f_b not in nonopen: # all else is open syllables
+                retval = True
+                if is_verbose:
+                    print(f_a + ' & ' + f_b + ' have compatible endings')
+            else:
+                if is_verbose:
+                    print(f_a + ' & ' + f_b + ' are NOT compatible!')
+
+    return retval
+
+    #x = 1
         #print(poem_dot_stanza)
 #test_poepy_stuff()
 #count_num_nodes_for_baxter_1992()
@@ -1687,12 +1857,14 @@ def given_list_of_raw_lines_get_list_of_poem_dot_stanza(rline_list):
 #playing_with_poepy_edge_list()
 
 #dupe_test()
+
 #raw_data_dupe_test()
 
-create_network_for_baxter1992_data_4() #---
+#create_network_for_baxter1992_data_4() #---
 
 
 #test_get_single_stanza_data_for_baxter1992_data()
 #test_get_shijing_stats_for_single_char()
 #test_print_shijing_lines_for_given_char()
 #print_shijing_lines_for_list_of_chars(['求', '休', '觩'], True)
+#print_list_of_chars_like_python_list('方、旁、重、僮','、')

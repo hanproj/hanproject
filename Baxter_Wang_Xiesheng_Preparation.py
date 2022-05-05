@@ -1,5 +1,8 @@
-#!/usr/bin/env python
-# coding: utf-8
+#! C:\Python36\
+# -*- encoding: utf-8 -*-
+
+##!/usr/bin/env python
+## coding: utf-8
 
 # In[8]:
 
