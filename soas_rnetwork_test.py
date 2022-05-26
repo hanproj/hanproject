@@ -17,23 +17,26 @@
 #    get_wang1980_data_dir()
 
 import os
-
-from py3_outlier_utils import readlines_of_utf8_file
+import codecs
+from soas_imported_from_py3 import readlines_of_utf8_file
 from poepy import Poems
 import networkx as nx
-from py3_outlier_utils import append_line_to_utf8_file
+from soas_imported_from_py3 import append_line_to_utf8_file
 import datetime
-from test_is_hanzi import is_kana_letter
-from py3_middle_chinese import get_mc_data_for_char
-
+from soas_imported_from_py3 import is_kana_letter
+from soas_imported_from_py3 import get_mc_data_for_char
+import time
 #globals
 b92_label_dict = {}
 b92_shijing_dict = {}
 sj_num2name_dict = {}
 sj_line2poem_dict = {}
 
+def get_hanproj_dir():
+    return os.path.join('D:' + os.sep + 'Ash', 'SOAS', 'code', 'hanproj')
+
 def get_hanproject_dir():
-    return os.path.join('D:' + os.sep + 'Ash', 'SOAS', 'code', 'hanproject')
+    return os.path.join(get_hanproj_dir(), 'hanproject')
 
 def get_soas_data_dir():
     return os.path.join('D:' + os.sep + 'Ash', 'SOAS', 'data')
@@ -292,6 +295,17 @@ def is_line_a_rhyming_line(line):
         retval = True
     return retval
 
+def let_this_char_become_node(zi):
+    if zi.isdigit():
+        return False
+    if is_kana_letter(zi):
+        return False
+    zi = remove_unwanted_chars_from_str(zi)
+    if not zi.strip():
+        return False
+    return True
+
+
 class rnetwork: # rhyme network
     def __init__(self):
         self.node_dict = {}
@@ -405,6 +419,9 @@ class rnetwork: # rhyme network
             retval += node_data
         return retval
 
+    def get_node_dict(self):
+        return self.node_dict
+
     def get_networkx_graph_of_rhyme_network(self, print_data=False):
         funct_name = 'get_networkx_graph_of_rhyme_network()'
         print('Entering ' + funct_name + '...')
@@ -439,17 +456,32 @@ class rnetwork: # rhyme network
         print('\tDone.')
         return retval
 
-    def get_infomap_linked_list_of_rhyme_network(self, print_data=False):
+    def get_infomap_linked_list_of_rhyme_network(self, filename_base='', print_data=False):
         funct_name = 'get_infomap_linked_list_of_rhyme_network()'
-        print('Entering ' + funct_name + '...')
+        msg = 'Entering ' + funct_name
+        if filename_base:
+            msg += ' for ' + filename_base + '...'
+        print(msg)
+        start_time = time.time()
         network_data = self.print_all_nodes_n_edges(is_verbose=False)
         retval = nx.Graph()
         current_node = ''
         id2edge_dict = {}
         node_inc = 0
-        output_file = 'linked_list' + get_timestamp_for_filename() + '.txt'
+        output_file = 'nodes_n_edges_'
+        if filename_base:
+            output_file += filename_base + '_'
+        output_file += get_timestamp_for_filename() + '.txt'
         if os.path.isfile(output_file):
             os.remove(output_file)
+        if 'stelae' in output_file:
+            output_file = os.path.join(get_hanproj_dir(), 'stelae', output_file)
+        elif 'mirror' in output_file:
+            output_file = os.path.join(get_hanproj_dir(), 'mirrors', output_file)
+        elif 'received' in output_file:
+            output_file = os.path.join(get_hanproj_dir(), 'received-shi', output_file)
+        elif 'combo' in output_file:
+            output_file = os.path.join(get_hanproj_dir(), output_file)
         append_line_to_utf8_file(output_file, '# A network in Pajek format')
         append_line_to_utf8_file(output_file, '*Vertices in ' + str(self.get_num_nodes()))
         print('# A network in Pajek format')
@@ -481,16 +513,19 @@ class rnetwork: # rhyme network
                 msg_out = str(zi2node_dict[zi_a]) + ' ' + str(zi2node_dict[zi_b]) + ' ' + str(edge_weight)
                 append_line_to_utf8_file(output_file, msg_out)
         print('\tDone.')
+        end_time = time.time()
+        print('\tElapsed time: ' + "%0.2f" % (end_time - start_time))
         return retval
 
 def remove_unwanted_chars_from_str(tstr):
     unwanted_chars = [')','>','｛','？',']','「','”','）','■','；','：','\'','、','」', '･', '＊','×','?', '○','】','‐', '］',
-                      '＝','●','々', 'e', ':','』','〕','Ⅱ']
+                      '＝','●','々', 'e', ':','』','〕','Ⅱ', '!', '！']
     #if any(uc in tstr for uc in unwanted_chars):
     for c in unwanted_chars:
         if c in tstr:
             tstr = tstr.replace(c,'')
     return tstr
+
 def get_timestamp_for_filename():
     return datetime.datetime.now().strftime("%A_%d_%B_%Y_%I_%M%p")
 
@@ -1849,7 +1884,8 @@ def have_compatible_yunwei(zi_a, zi_b, is_verbose=False):
 
     return retval
 
-    #x = 1
+
+        #x = 1
         #print(poem_dot_stanza)
 #test_poepy_stuff()
 #count_num_nodes_for_baxter_1992()

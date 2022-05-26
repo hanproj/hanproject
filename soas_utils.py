@@ -14,6 +14,12 @@
 #    get_stelae_dir()
 #    etc.
 
+# rhyming assumptions for naive annotators:
+#
+# For the mao 2008 stelae data
+# - each line rhymes, i.e., all words before a 。 or ； rhyme (except special words like 兮、也、etc.)
+# For the Lu 1983 received shi
+# - every other line rhymes
 import os
 import codecs
 from copy import deepcopy
@@ -24,7 +30,10 @@ import numpy
 import cydifflib
 #from num_conversion import kansuji2arabic
 from soas_rnetwork_test import rnetwork
+from soas_rnetwork_test import let_this_char_become_node
 from soas_rnetwork_test import get_timestamp_for_filename
+from soas_imported_from_py3 import readlines_of_utf8_file
+
 #import PyQt5
 from PIL import Image
 #from PIL.Image import core as _imaging
@@ -36,13 +45,24 @@ import altair_viewer as alt_view
 import nx_altair as nxa
 import matplotlib.pyplot as plt
 from infomap import Infomap
-from py3_middle_chinese import get_mc_data_for_char
-from test_is_hanzi import is_kana_letter
+from soas_imported_from_py3 import get_mc_data_for_char
+from soas_imported_from_py3 import is_kana_letter
 # from: https://www.programcreek.com/python/example/89583/networkx.draw_networkx_labels
 plt.rcParams['font.sans-serif'] = ['SimHei']  # 步骤一（替换sans-serif字体）
 plt.rcParams['axes.unicode_minus'] = False  # 步骤二（解决坐标轴负数的负号显示问题）
 
 utf8_bom_b = b'\xef\xbb\xbf'
+
+lh_main_vowels = ['i', 'ɨ', 'y', 'u', 'e', 'o', 'ɑ', 'a', 'ə', 'ɛ', 'ɔ']
+lh_medials = ['i', 'ɨ', 'y', 'u']
+
+lhan_initials = ['dz', 'dẓ', 'dẓ', 'dź', 'tś', 'ts', 'tṣ', 'tṣ', 'd', 'ḍ', 'ḍ',
+                 'g', 'ɡ', 'h', 'j', 'k', 'Ɣ', 'ɣ', 'm', 'n', 'ń', 'ṇ', 'ṇ',
+                 'ŋ', 'b', 'p', 'r', 's', 'ṣ', 'ś', 't', 'ṭ', 'ṭ', 'x', 'z',
+                 'ź', 'l', 'ʔ', 'Ɂ']
+aspiration = 'ʰ'
+zero_initial = '∅'
+post_codas = ['s', 'h', 'ʔ', 'Ɂ', 'ᶜ', 'ᴮ']
 
 def get_soas_code_dir():
     return os.path.join('D:' + os.sep + 'Ash', 'SOAS', 'code')
@@ -65,21 +85,6 @@ def get_received_bronzes_dir():
 def get_schuesslerhanchinese_dir():
     return os.path.join(get_soas_code_dir(),'schuesslerhanchinese')
 
-def readlines_of_utf8_file(filename):
-    funct_name = 'readlines_of_utf8_file()'
-    retval = []
-    if not os.path.isfile(filename):
-        print(funct_name + u' ERROR: filename INVALID: ' + filename)
-        return retval
-    with open(filename, 'rb') as f:
-        line_list = f.readlines()
-    line_list[0] = line_list[0].replace(utf8_bom_b, b'')
-    for line in line_list:
-        line = line.decode('utf8')
-        line = line.replace('\r\n', '')
-        line = line.replace('\n', '')
-        retval.append(line)
-    return retval
 
 # the mirror data has '\r' instead of '\r\n' or '\n'
 def readlines_of_utf8_file_for_mirror_data(filename):
@@ -1580,7 +1585,7 @@ def parse_han_data_from_lu_1983():
     is_verbose = False
     delim = '\t'
     line_return ='\n'
-    output_file = os.path.join(get_received_shi_dir(), 'processed-Lu-1983-先秦漢魏晉南北朝詩.txt')
+    output_file = os.path.join(get_received_shi_dir(), 'parsed-Lu-1983-先秦漢魏晉南北朝詩.txt')
     # if output file already exists, delete it
     if os.path.isfile(output_file):
         os.remove(output_file)
@@ -1613,7 +1618,7 @@ def readin_lu_1983_data(is_verbose=False):
     global lu1983_labels
     if lu1983_dict:
         return lu1983_labels
-    input_file = os.path.join(get_received_shi_dir(), 'processed-Lu-1983-先秦漢魏晉南北朝詩.txt')
+    input_file = os.path.join(get_received_shi_dir(), 'parsed-Lu-1983-先秦漢魏晉南北朝詩.txt')
     if not os.path.isfile(input_file):
         print(funct_name + ' ERROR: Input file INVALID!')
         print('\t' + input_file)
@@ -1721,11 +1726,18 @@ def grab_last_character_in_line(line):
     # take into account 虛字 like 之、兮、乎, etc
     if not line.strip():
         return ''
-    exception_chars = ['之', '兮', '乎', '也']
+    if '守善不報，' in line:
+        x = 1
+    exception_chars = ['之', '兮', '乎', '也', '矣', '焉']
+    char_pos = len(line)-1
     last_char = line[len(line)-1]
-    if last_char in exception_chars:
-        last_char = line[len(line)-2]
-    return last_char
+    if last_char == '）':
+        last_char = line[len(line) - 2]
+        char_pos -= 1
+    elif last_char in exception_chars:
+        last_char = line[len(line) - 2]
+        char_pos -= 1
+    return last_char, char_pos
 
 def get_kmss2015_rhyme_words_naively(inscription, unique_id, ignore_unpunctuated=True):
     funct_name = 'get_rhyme_words_naively()'
@@ -1792,7 +1804,6 @@ def get_rhyme_words_naively(stanza, line_length, unique_id, rw_type='Lu1983'):
                 rw2line_dict[zi].append((line,line_id))
     return rw2line_dict
         # grab_last_character_in_line
-
 
 def naively_annotate_han_dynasty_poems():
     funct_name = 'naively_annotate_han_dynasty_poems()'
@@ -1972,7 +1983,422 @@ def naively_annotate_han_dynasty_poems():
             print('\t' + ''.join(cluster2zi_dict[cluster_id]))
         #return graph
 
+def test_multi_dataset_processor():
+    funct_name = 'test_multi_dataset_processor()'
+    is_verbose = True
+    processor = multi_dataset_processor(is_verbose)
+    processor.process_mao_2008_stelae_data()
+    processor.naively_add_lu1983_to_network()
+    processor.naively_add_kyomeishusei2015_han_mirror_data()
 
+    #processor.print_all_nodes_n_edges()
+    processor.print_nodes_n_edges2file('all', 'naively')
+    #node_list = processor.get_overall_node_list()
+
+    #processor.plot_results()
+
+rw_list = ['a', 'b', 'c', 'd', 'e', 'f', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
+           'w', 'x', 'y', 'z']
+class rhyme_marker:
+    def __init__(self):
+        self.rw_list = rw_list[:]
+        self.rhyme2marker_dict = {}
+        self.cnt = -1
+    def get_marker(self, rhyme):
+        retval = ''
+        if rhyme in self.rhyme2marker_dict:
+            retval = self.rhyme2marker_dict[rhyme]
+        else:
+            self.cnt += 1
+            retval = self.rw_list[self.cnt]
+            self.rhyme2marker_dict[rhyme] = retval
+        return retval
+    def reset_memory(self):
+        self.rhyme2marker_dict = {}
+        self.cnt = -1
+
+
+class multi_dataset_processor:
+    def __init__(self, is_verbose=False):
+        self.is_verbose = is_verbose
+        self.print('Creating multi_dataset_processor...')
+        self.rhyme_net = rnetwork()
+        self.graph = nx.Graph()
+        self.received_net = rnetwork()
+        self.received_graph = nx.Graph()
+        self.stelae_rnet = rnetwork()
+        self.stelae_graph = nx.Graph()
+        self.mirror_rnet = rnetwork()
+        self.mirror_graph = nx.Graph()
+        self.run_naive_annotator = True
+        self.run_schuessler_annotator = True
+        self.print('\tDone.')
+
+        #NOTE:
+        # this function just prints out the data in its current state
+        # -> this state may change at different levels of processing
+        # RECOMMENDED: have the state name in 'filename_base' (like: naive, schuessler, etc.)
+    def print_nodes_n_edges2file(self, network_type, filename_base):
+        if network_type == 'combined':
+            self.rhyme_net.get_infomap_linked_list_of_rhyme_network('combined_' + filename_base)
+        elif network_type == 'stelae':
+            self.stelae_rnet.get_infomap_linked_list_of_rhyme_network('stelae_' + filename_base)
+        elif network_type == 'mirrors':
+            self.mirror_rnet.get_infomap_linked_list_of_rhyme_network('mirrors_' + filename_base)
+        elif network_type == 'received_shi':
+            self.received_net.get_infomap_linked_list_of_rhyme_network('received_shi_' + filename_base)
+        elif network_type == 'all':
+            self.rhyme_net.get_infomap_linked_list_of_rhyme_network('combined_' + filename_base)
+            self.stelae_rnet.get_infomap_linked_list_of_rhyme_network('stelae_' + filename_base)
+            self.mirror_rnet.get_infomap_linked_list_of_rhyme_network('mirrors_' + filename_base)
+            self.received_net.get_infomap_linked_list_of_rhyme_network('received_shi_' + filename_base)
+
+    def is_schuessler_annotator_on(self):
+        return self.run_schuessler_annotator
+    def is_naive_annotator_on(self):
+        return self.run_naive_annotator
+    def turn_on_schuessler_annotator(self):
+        self.run_schuessler_annotator = True
+    def turn_off_schuessler_annotator(self):
+        self.run_schuessler_annotator = False
+    def turn_on_naive_annotator(self):
+        self.run_naive_annotator = True
+    def turn_off_naive_annotator(self):
+        self.run_naive_annotator = False
+    def print(self, msg):
+        if self.is_verbose:
+            print(msg)
+
+    def get_overall_node_list(self):
+        return self.rhyme_net.get_node_list()
+
+    def print_all_nodes_n_edges(self):
+        self.rhyme_net.print_all_nodes_n_edges(True)
+
+    def plot_results(self):
+        self.print('Plotting results...')
+
+        nx.draw(self.graph, with_labels=True,
+                bbox=dict(facecolor="skyblue", edgecolor='black', boxstyle='round,pad=0.2'),
+                font_family='HanaMinA')
+        plt.show()#bbox=dict(facecolor="skyblue", edgecolor='black', boxstyle='round,pad=0.2')
+        self.print('\tDone.')
+
+    def process_mao_2008_stelae_data(self):
+        funct_name = 'process_mao_2008_stelae_data()'
+        self.print('Naively adding Mao 2008 data...')
+        s_data = readin_mao_2008_stelae_data(is_verbose=True)
+        uniq2data_dict = s_data.get_uniq2data_dict()
+        naive_output = ''
+        schuessler_output = ''
+        if self.is_schuessler_annotator_on():
+            schuessler_output = os.path.join(get_stelae_dir(), 'schuessler_annotated_毛遠明 《漢魏六朝碑刻校注》.txt')
+            delete_file_if_it_exists(schuessler_output)
+            schuessler = schuessler_n_bentley()
+        if self.is_naive_annotator_on():
+            naive_output = os.path.join(get_stelae_dir(), 'naively_annotated_毛遠明 《漢魏六朝碑刻校注》.txt')
+            delete_file_if_it_exists(naive_output)
+        msg_out = ''
+        rmarker = rhyme_marker()
+        for s_id in uniq2data_dict:
+#            if '.080' in s_id:
+#                x = 1
+            poem = uniq2data_dict[s_id].get_poem_content()
+            rw_words = get_numbered_rhyme_words_from_stele_inscription(s_id, poem)
+            if not rw_words:
+                if self.is_naive_annotator_on():
+                    for p in poem:
+                        append_line_to_utf8_file(naive_output, s_id + ': ' + p)
+                if self.is_schuessler_annotator_on():
+                    for p in poem:
+                        append_line_to_utf8_file(schuessler_output, s_id + ': ' + p)
+            #if rw_words: # if there are any rhyme words...
+            if rw_words:
+                x = 1
+            rmarker.reset_memory() # TO DO: think more about where this might be needed: blank lines in between stanza
+
+            for line_k in rw_words:
+                smsg_out = s_id + ': '
+                erw_words = []
+                if len(rw_words[line_k]) == 1 or len(rw_words[line_k]) == 0:
+                    y = rw_words[line_k]
+                    x = 1
+
+                if self.is_schuessler_annotator_on():
+                    for rw_inc in rw_words[line_k]:
+                        tup_list = rw_words[line_k][rw_inc]
+                        for tp in tup_list:
+                            rword = tp[0]
+                            rpos = tp[1]
+                            oline = tp[2]
+                            rhyme = ''
+
+                            lhan = schuessler.get_late_han(rword)  # e = hanzi
+                            #
+                            # TO DO: fix this problem
+                            # what to do with multiple readings?
+                            # For now, we're just going to randomly choose pronunciation #1
+                            # Later, need to have chosen pronunciations optimize rhyming
+                            if lhan:
+                                initial, medial, rhyme, pcoda = parse_schuessler_lhan_syllable(lhan[0])
+                                marker = rmarker.get_marker(rhyme)
+                                new_line = insert_rhyme_marker_at_pos(oline, rpos, marker + '(' + rhyme + ')')
+                                smsg_out += new_line + '。'
+                                print('[' + str(rw_inc) + '] ' + rword + ':' + new_line)
+                    append_line_to_utf8_file(schuessler_output, smsg_out)
+
+
+                tup_list = []
+                #
+                # add Nodes
+                for rw_inc in rw_words[line_k]:
+                    tup_list = rw_words[line_k][rw_inc]
+                    for tup in tup_list:
+                        debug_test = rw_words[line_k][rw_inc]
+
+                        rhyme_word = tup[0]#rw_words[line_k][rw_inc][0] # 0 - rhyme word, 1 - char pos in line
+                        rw_pos = tup[1]#rw_words[line_k][rw_inc][1]
+                        orig_line = tup[2]
+                        erw_words.append(rhyme_word)
+                        if self.is_naive_annotator_on():
+                            new_line = insert_rhyme_marker_at_pos(orig_line, rw_pos, 'a')
+                            msg_out += new_line + '。'
+                            print('[' + str(rw_inc) + '] ' + rhyme_word + ':' + new_line)
+                            #append_line_to_utf8_file(naive_output, msg_out)
+                        if not let_this_char_become_node(rhyme_word):
+                            continue
+                        self.rhyme_net.add_node(rhyme_word, '1', '\n'.join(poem)) # common to all data
+                        self.stelae_rnet.add_node(rhyme_word, '1', '\n'.join(poem)) # stelae only data
+                        weight = self.rhyme_net.get_node_weight(rhyme_word)
+                        self.graph.add_node(rhyme_word, weight=weight) # common to all data
+                        self.stelae_graph.add_node(rhyme_word, weight=weight) # stelae only data
+                    #
+                    # add Edges
+                    for left_inc in range(0, len(erw_words), 1):
+                        msg = '-'*40 + '\n'
+                        for right_inc in range(left_inc + 1, len(erw_words), 1):
+                            rhyme_num = s_id
+                            #d = rw_words[left_inc+1]
+                            left_rword = erw_words[left_inc]
+                            right_rword = erw_words[right_inc]
+
+                            msg += s_id + ': '
+                            msg += left_rword + ':' + right_rword + ', num_rhymes_same_type = '
+                            msg += str(len(erw_words)) + ', poem_stanza_num = ' + rhyme_num
+                            #if print_debug_msg:
+                            #print(msg) # debug only
+                            msg = ''
+                            if not let_this_char_become_node(left_rword):
+                                continue
+                            if not let_this_char_become_node(right_rword):
+                                continue
+                            self.rhyme_net.add_edge(left_rword, right_rword, len(erw_words), rhyme_num)
+                            self.stelae_rnet.add_edge(left_rword, right_rword, len(erw_words), rhyme_num)
+                            #im.add_link(rw_list[left_inc], rw_list[right_inc])
+                            edge_weight = self.rhyme_net.get_edge_weight(left_rword, right_rword)
+                            self.graph.add_edge(left_rword, right_rword, weight=edge_weight)
+                            self.stelae_graph.add_edge(left_rword, right_rword, weight=edge_weight)
+                if self.is_naive_annotator_on():
+                    append_line_to_utf8_file(naive_output, msg_out)
+                # print(msg_out)  # output to annotated file
+        self.print('\tDone.')
+
+    def naively_annotate_mao_2008_stelae_data(self):
+        funct_name = 'naively_annotate_mao_2008_stelae_data()'
+        if not self.stelae_rnet:
+            print(funct_name + ' ERROR: Run self.naively_add_mao_2008_stelae_data() before running this function.')
+            return
+
+
+    def naively_get_rhyme_words(self):
+        funct_name = 'naively_get_rhyme_words()'
+        for s_id in self.uniq2data_dict:
+            poem = self.uniq2data_dict[s_id].get_poem_content()
+            #print(s_id + '\t' + '\n'.join(poem))
+            inc = 0
+            #for p in poem:
+            #    inc += 1
+            #    print(s_id + ' (' + str(inc) + ') ' + p)
+            rw_words = get_rhyme_words_from_stele_inscription(s_id, poem)
+            if rw_words: # if there are any rhyme words...
+                #
+                # add Nodes
+                for rhyme_word in rw_words:
+                    self.rhyme_net.add_node(rhyme_word, '1', '\n'.join(poem))
+                    weight = self.rhyme_net.get_node_weight(rhyme_word)
+                #
+                # add Edges
+                for left_inc in range(0, len(rw_words), 1):
+                    msg = '-'*40 + '\n'
+                    for right_inc in range(left_inc + 1, len(rw_words), 1):
+                        rhyme_num = s_id
+                        msg += s_id + ': '
+                        msg += rw_words[left_inc] + ':' + rw_words[right_inc] + ', num_rhymes_same_type = '
+                        msg += str(len(rw_words)) + ', poem_stanza_num = ' + rhyme_num
+                        #if print_debug_msg:
+                        #print(msg) # debug only
+                        msg = ''
+                        self.rhyme_net.add_edge(rw_words[left_inc], rw_words[right_inc], len(rw_words), rhyme_num)
+                        #im.add_link(rw_list[left_inc], rw_list[right_inc])
+                        edge_weight = self.rhyme_net.get_edge_weight(rw_words[left_inc], rw_words[right_inc])
+
+    def naively_add_kyomeishusei2015_han_mirror_data(self):
+        funct_name = 'naively_add_kyomeishusei2015_han_mirror_data()'
+        self.print('Naively adding Kyomeishusei2015 mirror data...')
+        id2inscription = readin_kyomeishusei2015_han_mirror_data()
+        no_punct = []
+        w_punct = []
+        #im = Infomap("--two-level --directed")
+        #rhyme_net = rnetwork()
+        for id in id2inscription:
+            # print(id + ': ' + '\n'.join(id2inscription[id]))
+            # if len(id2inscription[id]) != 1:
+            #    print('len: ' + str(len(id2inscription[id])))
+            #    if 0 and len(id2inscription[id]) > 2 and len(id2inscription[id]) < 502:
+            #        print('*'*100)
+            for l in id2inscription[id]:
+                rw_words = get_rhyme_words_for_kmss2015_mirror_inscription(id, l, use_unpunctuated=False)
+                #rhymes = ','.join(rw_words)
+                rhymes = []
+                for e in rw_words:
+                    try:
+                        rhymes.append(e[0])
+                    except:
+                        x = 1
+                rhymes = ','.join(rhymes)
+                rhymes = rhymes[0:len(rhymes) - 1]
+                print(id + ': ' + '\n'.join(id2inscription[id]) + ', RHYME WORDS: ' + rhymes)
+                if rw_words:  # if there are any rhyme words...
+                    #
+                    # add Nodes
+                    for rhyme_word in rw_words:
+                        if not rhyme_word:
+                            continue
+                        rhyme_word = rhyme_word[0]
+                        if not let_this_char_become_node(rhyme_word):
+                            continue
+                        self.rhyme_net.add_node(rhyme_word, '1', '\n'.join(id2inscription[id])) # common data
+                        self.mirror_rnet.add_node(rhyme_word, '1', '\n'.join(id2inscription[id])) # mirror only data
+                        weight = self.rhyme_net.get_node_weight(rhyme_word)
+                        self.graph.add_node(rhyme_word, weight=weight) # common data
+                        self.mirror_graph.add_node(rhyme_word, weight=weight) # mirror only data
+                    #
+                    # add Edges
+                    for left_inc in range(0, len(rw_words), 1):
+                        msg = '-' * 40 + '\n'
+                        for right_inc in range(left_inc + 1, len(rw_words), 1):
+                            rhyme_num = id
+                            msg += id + ': '
+                            left_rw = rw_words[left_inc][0]
+                            right_rw = rw_words[right_inc][0]
+                            msg += left_rw + ':' + right_rw + ', num_rhymes_same_type = '
+                            msg += str(len(rw_words)) + ', poem_stanza_num = ' + rhyme_num
+                            # if print_debug_msg:
+                            # print(msg) # debug only
+                            msg = ''
+                            if not let_this_char_become_node(left_rw):
+                                continue
+                            if not let_this_char_become_node(right_rw):
+                                continue
+                            self.rhyme_net.add_edge(left_rw, right_rw, len(rw_words), rhyme_num)
+                            self.mirror_rnet.add_edge(left_rw, right_rw, len(rw_words), rhyme_num)
+                            # im.add_link(rw_list[left_inc], rw_list[right_inc])
+                            edge_weight = self.rhyme_net.get_edge_weight(left_rw, right_rw)
+                            self.graph.add_edge(left_rw, right_rw, weight=edge_weight)
+                            self.mirror_graph.add_edge(left_rw, right_rw, weight=edge_weight)
+        #nodes_n_edges = rhyme_net.print_all_nodes_n_edges(is_verbose=True)
+        self.print('\tDone.')
+
+    def naively_add_lu1983_to_network(self, is_verbose=False):
+        funct_name = 'naively_add_lu1983_to_network()'
+        self.print('Naively adding Lu1983 data...')
+        readin_lu_1983_data()
+        LU_poem = lu1983_poem()
+        LU_poem.set_data_labels(lu1983_labels)
+        uniqid2poem_dict = {}
+        test_set = []
+        s2rhyme_list = {}
+        # Command line flags can be added as a string to Infomap
+        #im = Infomap("--two-level")
+        unwanted = ['〗', '）', '}', '：', '々']
+
+        for k in lu1983_dict:
+            #if testing_code and k.replace('Lu1983','') not in test_set:
+            #    continue
+            LU_poem.set_data_with_line_from_file(k, lu1983_dict[k])
+            uniqid2poem_dict[k] = ''
+            uniqid2poem_dict[k] = deepcopy(LU_poem)
+        for k in uniqid2poem_dict:#lu1983_poem
+            if is_verbose:
+                print('-'*50)
+            poem = uniqid2poem_dict[k].get_poem_content_as_str()
+            if is_verbose:
+                print(k + ': ' + poem)
+            stanza_list = poem.split('\n')
+            st_inc = 0
+            #
+            # The naive annotator assumes:
+            # - that all words in a single stanza that appear in a rhyming position rhyme together
+            # - the last character of every other line (starting on line 2) rhyme
+            for stanza in stanza_list:
+                if not stanza.strip():
+                    continue
+                st_inc += 1
+                unique_id = uniqid2poem_dict[k].get_poem_id() + '.' + str(st_inc)
+                most_common_line_length = characterize_stanza_structure(stanza)
+                if most_common_line_length < 0:
+                    continue
+                rw2line_dict = get_rhyme_words_naively(stanza, most_common_line_length, unique_id)
+                # print stanza, show rhyme chars
+                #for l in stanza:
+                if len(rw2line_dict) > 1:
+                    print(unique_id + ': ' + stanza)
+                    print('Rhyme list = \'' + '\', \''.join(rw2line_dict.keys()) + '\'')
+                    #
+                    # Add Nodes to the rhyme network
+                    for rhyme_word in rw2line_dict:
+                        tup = rw2line_dict[rhyme_word][0]
+                        if not let_this_char_become_node(rhyme_word):
+                            continue
+                        self.rhyme_net.add_node(rhyme_word, tup[1], tup[0])
+                        self.received_net.add_node(rhyme_word, tup[1], tup[0])
+                        weight = self.rhyme_net.get_node_weight(rhyme_word)
+                        if any(unw in rhyme_word for unw in unwanted):
+                            continue
+                        self.graph.add_node(rhyme_word, weight=weight) # common data
+                        self.received_graph.add_node(rhyme_word, weight=weight) # received data only
+                    #
+                    # Add Edges to the rhyme network
+                    rw_list = [*rw2line_dict]
+                    num_rhymes_in_stanza = len(rw_list)#len(stanza_list)
+                    for left_inc in range(0, num_rhymes_in_stanza, 1):
+                        msg = '-'*40 + '\n'
+                        for right_inc in range(left_inc + 1, num_rhymes_in_stanza, 1):
+                            rhyme_num = unique_id
+                            msg += unique_id + ': '
+                            msg += rw_list[left_inc] + ':' + rw_list[right_inc] + ', num_rhymes_same_type = '
+                            msg += str(num_rhymes_in_stanza) + ', poem_stanza_num = ' + rhyme_num
+                            #if print_debug_msg:
+                            #print(msg) # debug only
+                            msg = ''
+                            if any(unw in rw_list[left_inc] for unw in unwanted):
+                                continue
+                            if any(unw in rw_list[right_inc] for unw in unwanted):
+                                continue
+                            if not let_this_char_become_node(rw_list[left_inc]):
+                                continue
+                            if not let_this_char_become_node(rw_list[right_inc]):
+                                continue
+
+                            self.rhyme_net.add_edge(rw_list[left_inc], rw_list[right_inc], num_rhymes_in_stanza, rhyme_num)
+                            self.received_net.add_edge(
+                                rw_list[left_inc], rw_list[right_inc], num_rhymes_in_stanza, rhyme_num)
+                            edge_weight = self.rhyme_net.get_edge_weight(rw_list[left_inc], rw_list[right_inc])
+                            left = rw_list[left_inc]
+                            right = rw_list[right_inc]
+                            self.graph.add_edge(rw_list[left_inc], rw_list[right_inc], weight=edge_weight)
+                            self.received_graph.add_edge(rw_list[left_inc], rw_list[right_inc], weight=edge_weight)
+        self.print('\tDone.')
 def test_visualize_infomap_output():
     funct_name = 'test_visualize_infomap_output()'
     filename = 'lu1983_infomap_output.txt'
@@ -2180,7 +2606,8 @@ def handle_paren_x(line, x):
 
 def get_schuessler_late_han_data(is_verbose=False):
     funct_name = 'get_schuessler_late_han_data()'
-    input_file = os.path.join(get_schuesslerhanchinese_dir(), 'raw', 'SchuesslerTharsen.tsv')
+    #input_file = os.path.join(get_schuesslerhanchinese_dir(), 'raw', 'SchuesslerTharsen.tsv')
+    input_file = os.path.join(get_hanproj_dir(), 'phonological_data', 'raw', 'SchuesslerTharsen.tsv')
     if not os.path.isfile(input_file):
         print(funct_name + ' ERROR: INVALID input file:')
         print('\t' + input_file)
@@ -2328,6 +2755,8 @@ def get_schuessler_late_han_data(is_verbose=False):
                     ocm_ipa = ocm_exceptions[g]
                 if '  ' in lh_ipa:
                     lh_ipa = lh_ipa.replace('  ',' ')
+                if g == '坐':
+                    x = 1
                 data = zh_ipa.strip() + delim + qy_ipa.strip() + delim + lh_ipa.strip() + delim + ocm_ipa.strip()
                 if g not in retval:
                     retval[g] = []
@@ -2348,8 +2777,8 @@ def get_schuessler_late_han_data(is_verbose=False):
 
                 if '  ' in lh_ipa:
                     lh_ipa = lh_ipa.replace('  ',' ')
-                #if g == '蟲':
-                #    x = 1
+                if g == '坐':
+                    x = 1
                 data = zh_ipa.strip() + delim + qy_ipa.strip() + delim + lh_ipa.strip() + delim + ocm_ipa.strip()
                 if is_verbose:
                     print('glyph=' + g)
@@ -2362,6 +2791,7 @@ def get_schuessler_late_han_data(is_verbose=False):
                     if '  ' in data: # debug
                         x = 1 # debug
                     retval[g].append(data)
+
     if 0:#is_verbose:
         print(str(len(retval)) + ' lines.')
         total_cnt = 0
@@ -2372,12 +2802,20 @@ def get_schuessler_late_han_data(is_verbose=False):
 
             total_cnt += len(retval[k])
         print(str(total_cnt) + ' in total count.')
-
-
+    # correct exceptions
+    if '摳' in retval:
+        retval['摳'] = 'kʰo kʰuo'
+    if '揗' in retval:
+        retval['揗'] = 'źuinᴮ źuinᶜ'
+    if '燁' in retval:
+        retval['燁'] = 'wap jəp'
+    if '晨' in retval:
+        retval['晨'] = 'dźin źin'
         #print(l)
         #print('\tzh_ipa: ' + zh_ipa + ', glyph: ' + glyph + ', qy_ipa: ' + qy_ipa + ', lh_ipa: ' + lh_ipa + ', ocm_ipa: ' + ocm_ipa)
 
     return retval
+
 
 def test_schuessler_phonological_data():
     funct_name = 'test_schuessler_phonological_data()'
@@ -2584,6 +3022,7 @@ class kmss_mirror_data:
     def print(self):
         print(self.get_print_str())
 
+# IMPORTANT: This is using a naive assumption about the rhyming patterns
 # ASSUMPTIONS:
 #   - (if no 「，」) rhyme words appear before 「。」
 #   - (if both 「，」、「。」) rhyme words appear before 「，」、「。」
@@ -2604,7 +3043,7 @@ def get_rhyme_words_for_kmss2015_mirror_inscription(unique_id, inscription, use_
             last_char = grab_last_character_in_line(i)
             if '・' in last_char or '…' in last_char or '□' in last_char:
                 continue
-            if last_char not in retval:
+            if last_char and last_char not in retval:
                 retval.append(last_char)
     elif '。' in inscription: # handle ...。...。...。 case
         inscription = inscription.split('。')
@@ -2612,10 +3051,12 @@ def get_rhyme_words_for_kmss2015_mirror_inscription(unique_id, inscription, use_
             last_char = grab_last_character_in_line(i)
             if '・' in last_char or '…' in last_char or '□' in last_char:
                 continue
-            if last_char not in retval:
+            if last_char and last_char not in retval:
                 retval.append(last_char)
     if len(retval) == 1:
         retval = [] # can't have just one rhyme word
+    if retval and retval[len(retval)-1] == '':
+        retval = retval[0:len(retval)-1]
     return retval
 
 
@@ -2658,27 +3099,54 @@ def process_kyomeishusei2015_han_mirror_data():
                         rhyme_net.add_edge(rw_words[left_inc], rw_words[right_inc], len(rw_words), rhyme_num)
                         #im.add_link(rw_list[left_inc], rw_list[right_inc])
                         edge_weight = rhyme_net.get_edge_weight(rw_words[left_inc], rw_words[right_inc])
-    nodes_n_edges = rhyme_net.print_all_nodes_n_edges(is_verbose=False)
-    #for e in nodes_n_edges:
-    #    print(e)
-    rhyme_net.get_infomap_linked_list_of_rhyme_network()
+    nodes_n_edges = rhyme_net.print_all_nodes_n_edges(is_verbose=True)
 
+#    rhyme_net.get_infomap_linked_list_of_rhyme_network()
 
+#◆〔
+def edit_kyomeishusei2015_han_mirror_data():
+    funct_name = 'edit_kyomeishusei2015_han_mirror_data()'
+    base_dir = os.path.join(get_mirrors_dir(), 'raw', 'txt')
+    src = os.path.join(base_dir, 'kyomeishusei2015_03.txt')
+    dst = os.path.join(base_dir, 'kyomeishusei2015_03.old.txt')
+    #if not os.path.isfile(src):
+    #    print(funct_name + ' ERROR: Invalid file: ' + src)
+    #    return []
+
+    if not os.path.isfile(dst):
+        os.rename(src, dst)
+    input_file = dst
+    output_file = src
+    line_list = readlines_of_utf8_file_for_mirror_data(input_file)
+    for ll in line_list:
+        if '◆〔' in ll:
+            ll = ll.replace('◆〔', '◆\n〔')
+        append_line_to_utf8_file(output_file, ll)
+    #append_line_to_utf8_file()
 
 def readin_kyomeishusei2015_han_mirror_data():
     funct_name = 'readin_kyomeishusei2015_han_mirror_data()'
     base_dir = os.path.join(get_mirrors_dir(), 'raw', 'txt')
+    output_file = os.path.join(get_mirrors_dir(), 'parsed_kyomeishusei2015_03.txt')
+    if os.path.isfile(output_file):
+        os.remove(output_file)
     # note: the data file is 03
     input_file = os.path.join(base_dir, 'kyomeishusei2015_03.txt')
     if not os.path.isfile(input_file):
         print(funct_name + ' ERROR: Invalid file: ' + input_file)
         return []
+    output_labels = ['SOAS ID', 'Original Poem#', 'Inscription Name', 'Insc. Name in Source', 'Data Source',
+                     'Physical Info','Inscription','Commentary']
+    append_line_to_utf8_file(output_file, '\t'.join(output_labels))
     line_list = readlines_of_utf8_file_for_mirror_data(input_file)
     start_tag = '《漢三國西晉鏡銘集成 00001》'
     start_looking = False
     unique_id = ''
+    orig_id = ''
     id2inscription = {}
     current_id = ''
+    commentary = ''
+    delim = '\t'
     for ll in line_list:
         if ll.strip().isdigit():
             continue # ignore page numbers
@@ -2687,13 +3155,15 @@ def readin_kyomeishusei2015_han_mirror_data():
         if start_tag in ll:
             start_looking = True
         if start_looking:
-
            #x = '《漢三國西晉鏡銘集成 '
             if '《漢三國西晉鏡銘集成 ' in ll:
                 ll = ll.split('》')
+                orig_id = ll[0] + '》'
                 unique_id = ll[0].replace('《漢三國西晉鏡銘集成 ', 'kyomeishusei2015_')
-                if '1499' in unique_id:
+                if '02065' in unique_id:
                     x = 1
+                data_source = '◆' + ll[1].replace('◆', '').strip() + '◆'
+                x = 1
                 #print('unique_id = \'' + unique_id + '\'')
                 #print('data source = \'' + ll[1] + '\'' )
             elif '《Ⅱ漢三國西晉鏡銘集成 ' in ll:
@@ -2701,8 +3171,12 @@ def readin_kyomeishusei2015_han_mirror_data():
                 unique_id = ll[0].replace('《Ⅱ漢三國西晉鏡銘集成 ', 'kyomeishusei2015_')
             elif ll and '〔' == ll[0]:
                 inscription_name = ll.split('〕[')[0] + '〕'
+                if '對置式神獸鏡' in inscription_name:
+                    x = 1
                 try:
-                    name_in_source = '[' + ll.split('〕[')[1].split('］')[0] + '］'
+                    name_in_source = '[' + ll.split('〕[')[1].split('］')[0] + ']'
+                    physical_info = (ll.split('〕[')[1].split('］')[1]).strip()
+                    physical_info.replace('\t', ' ')
                 except IndexError as ie:
                     #print(unique_id + ' has some irregularities. Skipping.')
                     #continue
@@ -2714,14 +3188,31 @@ def readin_kyomeishusei2015_han_mirror_data():
                     x = 1
                 try:
                     inscription = ll.split('◎')[1].strip()
-                    inscription = inscription.split('（')[0]  # get rid of commentary like （註）異體字銘帶 鏡Ⅱ式では「精」につくり，
+                    inscription = inscription.split('（')  # get rid of commentary like （註）異體字銘帶 鏡Ⅱ式では「精」につくり，
+                    if len(inscription) > 1:
+                        commentary = '（' + inscription[1]
+                    else:
+                        commentary = ''
+                    inscription = inscription[0]
                 except IndexError as ie:
                     x = 1
                 inscription = remove_num_from_end_of_str_if_there_is_one(inscription)
                 if unique_id not in id2inscription:
                     id2inscription[unique_id] = []
                 id2inscription[unique_id].append(inscription)
-
+                if len(id2inscription[unique_id]) > 1:
+                    x = 1
+                line_out = unique_id + delim + orig_id + delim + inscription_name + delim + name_in_source + delim
+                line_out += data_source + delim + physical_info + delim + inscription + delim + commentary
+                append_line_to_utf8_file(output_file, line_out)
+                unique_id = ''
+                orig_id = ''
+                inscription_name = ''
+                data_source = ''
+                name_in_source = ''
+                physical_info = ''
+                inscription = ''
+                print('line_out=' + line_out)
                 #print('inscription = ' + inscription)
                 if 0 and inscription.count('。') == 5:
                     print(unique_id + ' (' + str(inscription.count('。')) + ')' + add_late_han_before_each_period(inscription))
@@ -2786,11 +3277,290 @@ def convert_zh_num2ara_num(zh_num, num_digits='03'):
     #print(retval)
     return retval
 
-def readin_mao_2008_stelae_data():
-    funct_name = 'readin_mao_2008_stelae_data()'
+class single_stele:
+    def __init(self):
+        self.zero_out_data()
+    def add_entry(self, unique_id, stele_name, zh_date, western_year, page_num):
+        funct_name = 'add_entry()'
+        self.zero_out_data()
+        self.unique_id = unique_id
+        self.stele_name = stele_name
+        self.zh_date = zh_date
+        self.western_year = western_year
+        self.page_num = page_num
+
+    def zero_out_data(self):
+        self.unique_id = ''
+        self.stele_name = ''
+        self.zh_date = ''
+        self.western_year = ''
+        self.page_num = ''
+        self.delim = '\t'
+        self.poem_content = []
+
+    def add_poem_content(self, line):
+        self.poem_content.append(line)
+
+    def get_display_str(self):
+        delim = self.delim
+        msg = self.unique_id + delim + self.stele_name + delim + self.zh_date + delim + self.western_year
+        msg += delim + self.page_num + delim + '\n'.join(self.poem_content)
+        return msg
+
+    def get_output_str_for_parsed_data_file(self):
+        delim = self.delim
+        msg = self.unique_id + delim + self.stele_name + delim + self.zh_date + delim + self.western_year
+        msg += delim + self.page_num + delim + ' backslash_n '.join(self.poem_content)
+        return msg
+
+    def get_poem_content(self):
+        return self.poem_content[:]
+
+    def remove_last_line_of_poem_if_blank(self):
+        while not self.poem_content[len(self.poem_content)-1].strip():
+            self.poem_content.pop()
+
+class stelae_data:
+    def __init__(self):
+        self.uniq2data_dict = {}
+        self.n_rhyme_words = []
+        self.rhyme_net = rnetwork()
+
+    def get_uniq2data_dict(self):
+        return self.uniq2data_dict
+
+    def remove_last_poem_line_if_blank(self, unique_id):
+        if unique_id in self.uniq2data_dict:
+            self.uniq2data_dict[unique_id].remove_last_line_of_poem_if_blank()
+
+    def add_stele(self, unique_id, stele_name, zh_date, western_year, page_num):
+        if unique_id not in self.uniq2data_dict:
+            self.uniq2data_dict[unique_id] = single_stele()
+        self.uniq2data_dict[unique_id].add_entry(unique_id, stele_name, zh_date, western_year, page_num)
+
+    def add_poem_content(self, unique_id, line):
+        if unique_id not in self.uniq2data_dict:
+            print('stelae_data::add_poem_content() ERROR: ' + unique_id + ' not recognized!')
+            return
+        self.uniq2data_dict[unique_id].add_poem_content(line)
+
+    def get_output_str_for_parsed_data_file_for_single_stele(self, unique_id):
+        if unique_id not in self.uniq2data_dict:
+            print('stelae_data::get_display_str_for_single_stele() ERROR: ' + unique_id + ' not recognized!')
+            return ''
+        return self.uniq2data_dict[unique_id].get_output_str_for_parsed_data_file()
+
+    def get_display_str_for_single_stele(self, unique_id):
+        if unique_id not in self.uniq2data_dict:
+            print('stelae_data::get_display_str_for_single_stele() ERROR: ' + unique_id + ' not recognized!')
+            return ''
+        return self.uniq2data_dict[unique_id].get_display_str()
+
+    def print_all_stelae(self):
+        for s_id in self.uniq2data_dict:
+            print(self.get_display_str_for_single_stele(s_id))
+
+    def output_naive_annotation(self):
+        funct_name = 'output_naive_annotation()'
+        output_file = get_mao_2008_stelae_data_naive_annotator_output_file()
+        for s_id in self.uniq2data_dict:
+            poem = self.uniq2data_dict[s_id].get_poem_content()
+
+
+    # rhyme assumption:
+    # - all words before a 。 rhyme
+    def naively_get_rhyme_words(self):
+        funct_name = 'naively_get_rhyme_words()'
+        for s_id in self.uniq2data_dict:
+            poem = self.uniq2data_dict[s_id].get_poem_content()
+            #print(s_id + '\t' + '\n'.join(poem))
+            inc = 0
+            #for p in poem:
+            #    inc += 1
+            #    print(s_id + ' (' + str(inc) + ') ' + p)
+            rw_words = get_rhyme_words_from_stele_inscription(s_id, poem)
+            if rw_words: # if there are any rhyme words...
+                #
+                # add Nodes
+                for rhyme_word in rw_words:
+                    self.rhyme_net.add_node(rhyme_word, '1', '\n'.join(poem))
+                    weight = self.rhyme_net.get_node_weight(rhyme_word)
+                #
+                # add Edges
+                for left_inc in range(0, len(rw_words), 1):
+                    msg = '-'*40 + '\n'
+                    for right_inc in range(left_inc + 1, len(rw_words), 1):
+                        rhyme_num = s_id
+                        msg += s_id + ': '
+                        msg += rw_words[left_inc] + ':' + rw_words[right_inc] + ', num_rhymes_same_type = '
+                        msg += str(len(rw_words)) + ', poem_stanza_num = ' + rhyme_num
+                        #if print_debug_msg:
+                        #print(msg) # debug only
+                        msg = ''
+                        self.rhyme_net.add_edge(rw_words[left_inc], rw_words[right_inc], len(rw_words), rhyme_num)
+                        #im.add_link(rw_list[left_inc], rw_list[right_inc])
+                        edge_weight = self.rhyme_net.get_edge_weight(rw_words[left_inc], rw_words[right_inc])
+        #self.rhyme_net.print_all_nodes_n_edges(True)
+            # add Nodes
+            #self.rhyme_net
+            # add Edges
+
+# this is based on the naive assumption that each line rhymes (i.e., last word before 。)
+def get_rhyme_words_from_stele_inscription(unique_id, line_list, use_unpunctuated=False):
+    funct_name = 'get_rhyme_words_from_stele_inscription()'
+    punct_list = ['。', '，']
+    retval = []
+    for line in line_list: # this line_list represents an entire inscription
+        if '；' in line:
+            line = line.replace('；', '。') # treat ; just like 。
+        if use_unpunctuated and '，' not in line and '。' not in line: # handle unpunctuated case
+            return retval
+        elif 0 and '，' in line: # handle ...，...，...。 case
+            if line.count('。') > 1:
+                print(funct_name + ' UNUSUAL situation. ' + unique_id + ' has both 「，」、「。」 AND ')
+                print('\tmore than one 「。」')
+                return retval
+            line = line.replace('。', '')
+            line = line.split('，')
+            for i in line:
+                last_char = grab_last_character_in_line(i)
+                if '・' in last_char or '…' in last_char or '□' in last_char:
+                    continue
+                if last_char.strip() and last_char not in retval:
+                    retval.append(last_char)
+        elif '。' in line: # handle ...。...。...。 case
+            line = line.split('。')
+            for i in line:
+                last_char = grab_last_character_in_line(i)
+                if '・' in last_char or '…' in last_char or '□' in last_char:
+                    continue
+                if last_char.strip() and last_char not in retval:
+                    retval.append(last_char)
+    if len(retval) == 1:
+        retval = [] # can't have just one rhyme word
+    return retval
+
+# this is based on the naive assumption that each line rhymes (i.e., last word before 。)
+def get_numbered_rhyme_words_from_stele_inscription(unique_id, line_list, use_unpunctuated=False):
+    funct_name = 'get_numbered_rhyme_words_from_stele_inscription()'
+    punct_list = ['。', '，']
+    retval = {}
+    rw_cnt = 0
+    msg = ''
+    line_cnt = -1
+    for line in line_list: # this line_list represents an entire inscription
+        msg = 'For line: \'' + line + '\', the rhyme is'
+        last_char = ''
+        char_pos = ''
+        line_cnt += 1
+        if not line.strip():
+            continue
+        if '；' in line:
+            line = line.replace('；', '。') # treat ; just like 。
+        if use_unpunctuated and '，' not in line and '。' not in line: # handle unpunctuated case
+            return retval
+        elif 0 and '，' in line: # handle ...，...，...。 case
+            if line.count('。') > 1:
+                print(funct_name + ' UNUSUAL situation. ' + unique_id + ' has both 「，」、「。」 AND ')
+                print('\tmore than one 「。」')
+                return retval
+            line = line.replace('。', '')
+            line = line.split('，')
+            for i in line:
+                last_char, char_pos = grab_last_character_in_line(i)
+                if '・' in last_char or '…' in last_char or '□' in last_char:
+                    continue
+                if last_char.strip() and last_char not in retval:
+                    if line_cnt not in retval:
+                        retval[line_cnt] = {}
+                    if rw_cnt not in retval[line_cnt]:
+                        retval[line_cnt][rw_cnt] = []
+                    retval[line_cnt][rw_cnt].append((last_char, char_pos, i))
+                    #retval[rw_cnt] = (last_char, char_pos)
+
+        elif '。' in line: # handle ...。...。...。 case
+#            if line.count('。') == 1 and line[len(line)-1] == '。':
+#                line = line.split('。')
+#                line.pop()  # get rid of '' artifact
+#            else:
+            line = line.split('。')
+            line.pop()  # get rid of '' artifact
+#                x = 1
+            for i in line:
+                if not i.strip():
+                    if line_cnt not in retval:
+                        retval[line_cnt] = {}
+                    if rw_cnt not in retval[line_cnt]:
+                        retval[line_cnt][rw_cnt] = []
+                    retval[line_cnt][rw_cnt].append(('', -1, i))
+                    #retval[rw_cnt] = ('',-1)
+                    rw_cnt += 1
+                    continue
+                try:
+                    last_char, char_pos = grab_last_character_in_line(i)
+                except ValueError as ve:
+                    x = 1
+                if '・' in last_char or '…' in last_char or '□' in last_char:
+                    if line_cnt not in retval:
+                        retval[line_cnt] = {}
+                    if rw_cnt not in retval[line_cnt]:
+                        retval[line_cnt][rw_cnt] = []
+                    retval[line_cnt][rw_cnt].append(('', -1, i))
+                    #retval[rw_cnt] = ('',-1)
+                    rw_cnt += 1
+                    last_char = ''
+                    char_pos = ''
+                    continue
+                if last_char.strip() and last_char not in retval:
+                    if line_cnt not in retval:
+                        retval[line_cnt] = {}
+                    if rw_cnt not in retval[line_cnt]:
+                        retval[line_cnt][rw_cnt] = []
+                    retval[line_cnt][rw_cnt].append((last_char, char_pos, i))
+                    #retval[rw_cnt] = (last_char, char_pos)
+                    rw_cnt += 1
+                    #retval.append(last_char)
+        msg += ' (' + last_char + ', ' + str(char_pos) + ')'
+        print(msg)
+    if len(retval) == 1:
+        try:
+            if len(retval[0]) == 1:
+                x = 1
+                retval = {} # can't have just one rhyme word
+        except:
+            x = 1
+    return retval
+
+def process_mao_2008_stelae_data(is_verbose=False):
+    funct_name = 'process_mao_2008_stelae_data()'
+    # s_data is a stelae_data object
+    s_data = readin_mao_2008_stelae_data(is_verbose)
+    s_data.naively_get_rhyme_words()
+    s_data.output_naive_annotation()
+
+def get_mao_2008_stelae_data_input_file1():
     base_dir = os.path.join(get_stelae_dir(), 'raw', 'txt')
-    input_file1 = os.path.join(base_dir, '毛遠明 《漢魏六朝碑刻校注》第一冊.txt')
-    input_file2 = os.path.join(base_dir, '毛遠明 《漢魏六朝碑刻校注》第二冊.txt')
+    return os.path.join(base_dir, '毛遠明 《漢魏六朝碑刻校注》第一冊.txt')
+
+def get_mao_2008_stelae_data_input_file2():
+    base_dir = os.path.join(get_stelae_dir(), 'raw', 'txt')
+    return os.path.join(base_dir, '毛遠明 《漢魏六朝碑刻校注》第二冊.txt')
+
+def get_mao_2008_stelae_data_naive_annotator_output_file():
+    return os.path.join(get_stelae_dir(),'毛遠明 《漢魏六朝碑刻校注》-naive-annotator.txt')
+
+#
+# Rhyme assumption for the stelae data:
+# each line rhymes
+def readin_mao_2008_stelae_data(is_verbose=False):
+    funct_name = 'readin_mao_2008_stelae_data()'
+    labels = ['Soas-Unique-ID', 'Stele-Name', 'Chinese-Date', 'Western-Year', 'Page-#', 'Poem']
+
+    base_dir = os.path.join(get_stelae_dir(), 'raw', 'txt')
+    #input_file1 = os.path.join(base_dir, '毛遠明 《漢魏六朝碑刻校注》第一冊.txt')
+    #input_file2 = os.path.join(base_dir, '毛遠明 《漢魏六朝碑刻校注》第二冊.txt')
+    input_file1 = get_mao_2008_stelae_data_input_file1()
+    input_file2 = get_mao_2008_stelae_data_input_file2()
     base_num_list = ['〇', '一', '二', '三', '四', '五', '六', '七', '八', '九']
     if not os.path.isfile(input_file1):
         print(funct_name + ' ERROR: Invalid file: ' + input_file1)
@@ -2798,6 +3568,11 @@ def readin_mao_2008_stelae_data():
     if not os.path.isfile(input_file2):
         print(funct_name + ' ERROR: Invalid file: ' + input_file2)
         return []
+    output_file = os.path.join(get_stelae_dir(), 'parsed_毛遠明 《漢魏六朝碑刻校注》.txt')
+    if os.path.isfile(output_file):
+        os.remove(output_file)
+    append_line_to_utf8_file(output_file, '\t'.join(labels))
+    append_line_to_utf8_file(output_file, '# IMPORTANT: Convert \' backslash_n \' to \'\\n\' or \'\\r\\n\' depending on your system.' )
     line_list1 = readlines_of_utf8_file(input_file1)
     line_list2 = readlines_of_utf8_file(input_file2)
     line_list = line_list1 + line_list2
@@ -2808,20 +3583,24 @@ def readin_mao_2008_stelae_data():
     #last_line = line_list[len(line_list)-1]
     pos = -1
     line_list_len = len(line_list)
+    #stele_data = single_stele()
+    stele_dict = stelae_data()
+    stop_reading_tag = '三国·魏'
     for ll in line_list:
-        if '二四〇' in ll:
-            x = 1
         pos += 1
-        #if pos == line_list_len-1:
-        #    x = 1
-        if '：' in ll:
+        if stop_reading_tag in ll:
+            break
+        if '：' in ll: # new entry
             ll = ll.split('：')
             # if the beginning of a poem section
             if any(zh_num in ll[0] for zh_num in base_num_list):
                 # if previous poem exists, print it
                 if poem_content:
                     for l in poem_content:
-                        print(l)
+                        if is_verbose:
+                            print(l)
+                if mou_unique:
+                    stele_dict.remove_last_poem_line_if_blank(mou_unique)
                     #print('')
                 start_new_poem = True
                 poem_content = []
@@ -2856,36 +3635,681 @@ def readin_mao_2008_stelae_data():
                         zh_date_year = date_data[0]
                         western_year = date_data[1].split('）')[0]
                         zh_date_month = date_data[1].split('）')[1]
-                ara_num = convert_zh_num2ara_num(zh_num)
+                ara_num = convert_zh_num2ara_num(zh_num) # arabic number
+                if ara_num == '142':
+                    x = 1
                 #print(zh_num + ':' + ara_num)
                 mou_unique = 'Mou2008.' + ara_num
                 #print(mou_unique)
                 msg = mou_unique + delim + zh_num + '：' + stele_name + '，' + zh_date_year + '（' + western_year
                 msg += '）' + zh_date_month
+                stele_dict.add_stele(mou_unique, stele_name, zh_date_year + zh_date_month, western_year, page_num)
+                #stele_data.add_entry(mou_unique, stele_name, zh_date_year + zh_date_month, western_year, page_num)
                 if page_num:
                     msg += '，' + page_num
-                print(msg)
+                if is_verbose:
+                    print(msg)
                 start_new_poem = False
             else:
-                poem_content.append('：'.join(ll))
+                poem_content.append('X'.join(ll))
+                stele_dict.add_poem_content(mou_unique,'：'.join(ll))
+                #stele_data.add_poem_content('：'.join(ll))
         else:
-            if '守□不歇，比性乾坤' in ll:
-                x = 1
             if ll:
                 poem_content.append(ll)
+                #stele_data.add_poem_content(ll)
+                stele_dict.add_poem_content(mou_unique,ll)
             else:
                 if ll == '':
                     if poem_content and poem_content[len(poem_content)-1] != '': # don't add two empty lines in a row
                         poem_content.append(ll)
+                        #stele_data.add_poem_content(ll)
+                        stele_dict.add_poem_content(mou_unique, ll)
     # print out last poem
     for l in poem_content:
-        print(l)
+        if is_verbose:
+            print(l)
+        #stele_data.add_poem_content(l)
+        if stop_reading_tag not in ll:
+            stele_dict.add_poem_content(mou_unique, ll)
                 #print(ll[0])
+    uniq2data_dict = stele_dict.get_uniq2data_dict()
+    for k in uniq2data_dict:
+        output_msg = stele_dict.get_output_str_for_parsed_data_file_for_single_stele(k)
+        append_line_to_utf8_file(output_file, output_msg)
+        print(output_msg)
+    return stele_dict
+    #stele_dict.print_all_stelae()
+
+def naively_annotate_mao_2008_stelae_data(is_verbose=False):
+    funct_name = 'naively_annotate_mao_2008_stelae_data()'
+    labels = ['Soas-Unique-ID', 'Stele-Name', 'Chinese-Date', 'Western-Year', 'Page-#', 'Poem']
+
+    base_dir = os.path.join(get_stelae_dir(), 'raw', 'txt')
+    #input_file1 = os.path.join(base_dir, '毛遠明 《漢魏六朝碑刻校注》第一冊.txt')
+    #input_file2 = os.path.join(base_dir, '毛遠明 《漢魏六朝碑刻校注》第二冊.txt')
+    input_file1 = get_mao_2008_stelae_data_input_file1()
+    input_file2 = get_mao_2008_stelae_data_input_file2()
+    base_num_list = ['〇', '一', '二', '三', '四', '五', '六', '七', '八', '九']
+    if not os.path.isfile(input_file1):
+        print(funct_name + ' ERROR: Invalid file: ' + input_file1)
+        return []
+    if not os.path.isfile(input_file2):
+        print(funct_name + ' ERROR: Invalid file: ' + input_file2)
+        return []
+    output_file = os.path.join(get_stelae_dir(), 'naively_annotated_毛遠明 《漢魏六朝碑刻校注》.txt')
+    if os.path.isfile(output_file):
+        os.remove(output_file)
+    #append_line_to_utf8_file(output_file, '\t'.join(labels))
+    # append_line_to_utf8_file(output_file, '# IMPORTANT: Convert \' backslash_n \' to \'\\n\' or \'\\r\\n\' depending on your system.' )
+    line_list1 = readlines_of_utf8_file(input_file1)
+    line_list2 = readlines_of_utf8_file(input_file2)
+    line_list = line_list1 + line_list2
+    mou_unique = ''
+    delim = '\t'
+    start_new_poem = False
+    poem_content = []
+    #last_line = line_list[len(line_list)-1]
+    pos = -1
+    line_list_len = len(line_list)
+    #stele_data = single_stele()
+    stele_dict = stelae_data()
+    stop_reading_tag = '三国·魏'
+    exception_chars = ['之', '兮', '乎', '也', '矣']
+    #if '・' in last_char or '…' in last_char or '□' in last_char:
+    #    continue
+
+    for ll in line_list:
+        pos += 1
+        if '：' in ll:
+            append_line_to_utf8_file(output_file, ll)
+        elif '。' in ll:
+            if '；' in ll:
+                ll = ll.replace('；', '。')
+            ll = ll.split('。')
+            for sub_ll in ll:
+                if sub_ll[len(sub_ll)-1] == '）': # if last char i '）'
+                    spos = sub_ll.rfind('（')
+                    left = sub_ll[:spos]
+                    right = sub_ll[spos:]
+                    last_char = left[0:len(left)-1]
+                    left = left[0:len(left)-1]
+                    sub_ll = left + 'a' + last_char + right
+
+        continue
+        if stop_reading_tag in ll:
+            break
+        if '：' in ll: # new entry
+            ll = ll.split('：')
+            # if the beginning of a poem section
+            if any(zh_num in ll[0] for zh_num in base_num_list):
+                # if previous poem exists, print it
+                if poem_content:
+                    for l in poem_content:
+                        if is_verbose:
+                            print(l)
+                if mou_unique:
+                    stele_dict.remove_last_poem_line_if_blank(mou_unique)
+                    #print('')
+                start_new_poem = True
+                poem_content = []
+                zh_num = ll[0].strip()
+                if '《' in ll[1]: # type A parsing
+                    stele_name = ll[1].split('》')[0] + '》'
+                    date_data = ll[1].split('，')
+                    try:
+                        page_num = date_data[2].lower()
+                    except IndexError as ie:
+                        page_num = ''
+                        x = 1
+                    try:
+                        date_data = date_data[1]
+                    except IndexError as ie:
+                        x = 1
+                    zh_date_year = date_data.split('（')[0]
+                    western_year = date_data.split('（')[1]
+                    western_year = western_year.split('）')[0]
+                    zh_date_month = date_data.split('）')[1]
+                else: # type B parsing
+                    page_num = ''
+                    right_side_data = ll[1].split('　')
+                    stele_name = '《' + right_side_data[0] + '》'
+                    try:
+                        date_data = right_side_data[1]
+                    except:
+                        date_data = ''
+                        #continue
+                    if '（' in date_data:
+                        date_data = date_data.split('（')
+                        zh_date_year = date_data[0]
+                        western_year = date_data[1].split('）')[0]
+                        zh_date_month = date_data[1].split('）')[1]
+                ara_num = convert_zh_num2ara_num(zh_num) # arabic number
+                if ara_num == '142':
+                    x = 1
+                #print(zh_num + ':' + ara_num)
+                mou_unique = 'Mou2008.' + ara_num
+                #print(mou_unique)
+                msg = mou_unique + delim + zh_num + '：' + stele_name + '，' + zh_date_year + '（' + western_year
+                msg += '）' + zh_date_month
+                stele_dict.add_stele(mou_unique, stele_name, zh_date_year + zh_date_month, western_year, page_num)
+                #stele_data.add_entry(mou_unique, stele_name, zh_date_year + zh_date_month, western_year, page_num)
+                if page_num:
+                    msg += '，' + page_num
+                if is_verbose:
+                    print(msg)
+                start_new_poem = False
+            else:
+                poem_content.append('X'.join(ll))
+                stele_dict.add_poem_content(mou_unique,'：'.join(ll))
+                #stele_data.add_poem_content('：'.join(ll))
+        else:
+            if ll:
+                poem_content.append(ll)
+                #stele_data.add_poem_content(ll)
+                stele_dict.add_poem_content(mou_unique,ll)
+            else:
+                if ll == '':
+                    if poem_content and poem_content[len(poem_content)-1] != '': # don't add two empty lines in a row
+                        poem_content.append(ll)
+                        #stele_data.add_poem_content(ll)
+                        stele_dict.add_poem_content(mou_unique, ll)
+        return
+
 def test_get_schuessler_late_han_for_glyph(glyph_list):
     for glyph in glyph_list:
         retval = get_schuessler_late_han_for_glyph(glyph)
         print(glyph + ': ' + retval)
 
+def test_is_hanzi():
+    test_chars = ['a', '今', 'は', '𪛂', '1']
+    for tc in test_chars:
+        if is_hanzi(tc):
+            print(tc + ' IS a hanzi!')
+        else:
+            print(tc + ' is NOT a hanzi!')
+
+def is_hanzi(test_ord):
+    retval = False
+    if '\u4e00' <= test_ord <= '\u9fff':
+        return True
+        #    U+20000..U+2A6D6 : CJK Unified Ideographs Extension B
+    elif test_ord >= '\U00020000' and test_ord <= '\U0002a6d6':
+        retval = True
+    # U+2F800..U+2FA1D : CJK Compatibility Supplement
+    if test_ord >= '\U0002f800' and test_ord <= '\U0002fa1d':
+        retval = True
+        #  the cjk radicals supplement  0x2e80 - 0x2eff
+    elif test_ord >= '\u2e80' and test_ord <= '\u2eff':
+        retval = True
+        # kangxi rads 0x2f00 - 0x2fdf
+    elif test_ord >= '\u2f00' and test_ord <= '\u2fdf':
+        retval = True
+        # DON'T NEED THIS: description characters  0x2ff0 - 0x2fff
+        # DON'T NEED THIS: cjk xymbols and punctuation: 0x3000 - 0x303f
+        # cjk strokes: 0x31c0 - 0x31ef
+    elif test_ord >= '\u31c0' and test_ord <= '\u31ef':
+        retval = True
+        # DON'T NEED THIS: enclosed cjk letters and months: 0x3200 - 0x32ff
+        # CJK compatibility: 0x3300 - 0x33ff
+    elif test_ord >= '\u3300' and test_ord <= '\u33ff':
+        retval = True
+        # CJK compatibility ideographs: 0xf900 - 0xfaff
+    elif test_ord >= '\uf900' and test_ord <= '\ufaff':
+        retval = True
+        # CJK compatibiltiy forms; 0xfe30 - 0xfe4f
+    elif test_ord >= '\ufe30' and test_ord <= '\ufe4f':
+        retval = True
+        # enclosed ideographic supplement:  0x1f200 - 0x1f2ff
+    elif test_ord >= '\U0001f200' and test_ord <= '\U0001f2ff':
+        retval = True
+    return retval
+
+def is_multibyte_unicode(test_ord):
+    retval = False
+    if test_ord >= '\U00020000' and test_ord <= '\U0002a6d6':
+        retval = True
+    # U+2F800..U+2FA1D : CJK Compatibility Supplement
+    elif test_ord >= '\U0002f800' and test_ord <= '\U0002fa1d':
+        retval = True
+    elif test_ord >= '\U0001f200' and test_ord <= '\U0001f2ff':
+        retval = True
+    return retval
+
+def get_raw_bentley_2015_filename():
+    return os.path.join(get_soas_code_dir(),'hanproj','phonological_data', 'raw','bentley_2015.txt')
+
+def get_parsed_bentley_2015_late_han_data():
+    funct_name = 'get_parsed_bentley_2015_late_han_data()'
+    input_file = os.path.join(get_soas_code_dir(),'hanproj','phonological_data','parsed_bentley_2015_late_han_data.txt')
+    if not os.path.isfile(input_file):
+        print(funct_name + ' ERROR: Invalid input file: ' + input_file)
+        print('\tAborting.')
+        return {}
+    line_list = readlines_of_utf8_file(input_file)
+    retval = {}
+    for ll in line_list:
+        ll = ll.split('\t')
+        if ll[0] not in retval:
+            retval[ll[0]] = ''
+        retval[ll[0]] = ll[1]
+        #print(ll[0] + '|' + ll[1])
+    return retval
+
+def parse_bentley_2015(is_verbose=False):
+    funct_name = 'parse_bentley_2015()'
+    start_tag ='geographical list of provinces, districts, and villages, often with'
+    input_file = get_raw_bentley_2015_filename()
+    output_file = os.path.join(get_soas_code_dir(),'hanproj','phonological_data','parsed_bentley_2015_late_han_data.txt')
+    if os.path.isfile(output_file):
+        os.remove(output_file)
+    if not os.path.isfile(input_file):
+        print(funct_name + ' ERROR: Invalid input file:')
+        print('\t' + input_file)
+        print('\tAborting.')
+        return {}
+    start_reading = False
+    line_list = readlines_of_utf8_file(input_file)
+    retval = {}
+    hanzi = ''
+    late_han = ''
+    included_chars = []
+    exceptions = ['kah MC: kɛ: GO: ke KN: ka', 'kah MC: kɛ: GO: kai KN: ka', 'śas MC: śjäih GO: se KN: sei'
+        , 'ŋɑ MC: ŋɔ GO: gu KN: go']
+    #reject_list = ['蜂音','可愛', '馬聲']
+    for ll in line_list:
+        if not ll.strip():
+            continue
+        if start_tag in ll:
+            start_reading = True
+            if is_verbose:
+                print('start reading')
+        if start_reading:
+            #print(ll)
+            potential_hanzi = ll.strip()
+            if is_hanzi(potential_hanzi) and len(potential_hanzi) == 1:
+                #if len(potential_hanzi) == 2 and not is_multibyte_unicode(potential_hanzi):
+                #    continue
+                hanzi = potential_hanzi
+                if hanzi not in retval:
+                    retval[hanzi] = []
+                #retval[hanzi].append(hanzi)
+                continue
+            #else:
+            #    hanzi = ''
+            if 'LH: ' in ll and hanzi:
+                if hanzi == '聚':
+                    x = 1
+                #print(ll)
+                late_han = ll.split('LH: ')[1]
+                if '*kie > ' in late_han:
+                    late_han = late_han.replace('*kie > ', '')
+                if 'EMC' in late_han:
+                    late_han = late_han.split('EMC')[0]
+                else:
+                    late_han = late_han.split('MC')[0]
+                late_han = late_han.replace('NA','')
+                late_han = late_han.replace(' or ', ' ')
+                late_han = late_han.replace(',','')
+                late_han = late_han.replace(' > ', ' ')
+                late_han = late_han.replace(' < ', ' ')
+                late_han = late_han.replace(' / ', ' ')
+                late_han = late_han.replace('~', ' ')
+                late_han = late_han.replae('th', 'tʰ')
+                late_han = late_han.replace('ph', 'pʰ')
+                if '(' in late_han:
+                    root = late_han.split('(')[0]
+                    ending = late_han.split('(')[1]
+                    ending = ending.replace(')','')
+                    if 'h/ʔ' not in ending:
+                        late_han = root + ' ' + root + ending
+                    else:
+                        late_han = root + ' ' + root + 'h ' + root + 'ʔ'
+                #print(late_han)
+                #late_han = late_han.split(' ')[0].strip()
+                if late_han == 'NA' or not late_han.strip():
+                    late_han = ''
+                if hanzi and late_han:
+                    if hanzi == '莽':
+                        x = 1
+                    if ' ' in late_han:
+                        for lh in late_han.split(' '):
+                            if lh.strip() and lh.strip() not in retval[hanzi]:
+                                retval[hanzi].append(lh.strip())
+                    else:
+                        if late_han and late_han not in retval[hanzi]:
+                            retval[hanzi].append(late_han.strip())
+#                        retval[hanzi].append(late_han)
+                    hanzi = ''
+                    late_han = ''
+    for hz in retval:
+        if len(retval[hz]) > 1:
+            hz_set = list(set(retval[hz])) # get rid of dupes
+            if len(hz_set) < len(retval[hz]):
+                retval[hz] = []
+                retval[hz] = hz_set[:]
+    has_late_han = []
+    no_late_han = []
+    for hz in retval:
+        msg_out = hz + '\t' + ' '.join(retval[hz])
+        append_line_to_utf8_file(output_file, msg_out)
+        if ''.join(retval[hz]).strip():
+            if hz not in has_late_han:
+                has_late_han.append(hz)
+        else:
+            if hz not in no_late_han:
+                no_late_han.append(hz)
+        if is_verbose:
+            print(hz + ': ' + ', '.join(retval[hz]))
+    if is_verbose:
+        print(str(len(retval)) + ' total entries in Bentley 2015.')
+        print('\t' + str(len(has_late_han)) + ' of them have Han data.')
+        print('\t' + str(len(no_late_han)) + ' of them do NOT have Han data.')
+    #data correction
+    if '埃' in retval:
+        retval['埃'] = 'ʔə'
+    return retval
+
+def readin_preparsed_schuessler_late_han_data():
+    funct_name = 'readin_preparsed_schuessler_late_han_data()'
+    input_file = os.path.join(get_hanproj_dir(), 'phonological_data', 'parsed_schuessler_2007_data.txt')
+    if not os.path.isfile(input_file):
+        print(funct_name + ' ERROR: Invalid input file: ' + input_file)
+        print('\tAborting.')
+        return {}
+    retval = {}
+    line_list = readlines_of_utf8_file(input_file)
+    line_list = line_list[1:len(line_list)] # skip over the labels
+    for ll in line_list:
+        if '#' in ll:
+            ll = ll.split('#')[0]
+            if not ll.strip():
+                continue # skip over comment line
+        #print('ll='+ll)
+        entry = ll.split('\t')[0]
+        data = ll.replace(entry + '\t','').split('NEW_ENTRY')
+        if entry not in retval:
+            retval[entry] = []
+        for d in data:
+            retval[entry].append(d)
+        #print(entry + ':' + 'NE'.join(retval[entry]))
+    return retval
+
+def create_schuessler_late_han_data_file():
+    funct_name = 'create_schuessler_late_han_data_file()'
+    schuessler = get_schuessler_late_han_data()
+    output_file = os.path.join(get_hanproj_dir(), 'phonological_data', 'parsed_schuessler_2007_data.txt')
+    data_str = ''
+    if os.path.isfile(output_file): # if the output file already exists, delete it
+        os.remove(output_file)
+    label_list = ['wf_graph','wf_pinyin', 'QY_IPA', 'LH_IPA', 'OCM_IPA']
+    note = '#important: data types (pinyin, qy_ipa, etc.) are tab (\\t) separated.'
+    note += '\'NEW_ENTRY\' separates different sets of pronunciation for the same character.'
+    append_line_to_utf8_file(output_file, '\t'.join(label_list))
+    append_line_to_utf8_file(output_file, note)
+    if 1:
+        for s in schuessler:
+            data_str = ''
+            for e in schuessler[s]:
+                data_str += e + 'NEW_ENTRY'
+            data_str = data_str[0:len(data_str)-len('NEW_ENTRY')] # get rid of last space
+            append_line_to_utf8_file(output_file, s + '\t' + data_str)
+            #print(s + ': ' + '\t\n'.join(schuessler[s]))
+
+def test_get_schuessler_plus_bentley_2015():
+    print('Get Schuessler data...')
+    schuessler = get_schuessler_late_han_data()
+    print('\tDone.')
+    print('Get Bentley data...')
+    bentley = parse_bentley_2015()
+    print('\tDone.')
+    print('Get Schuessler plus...')
+    schuessler_plus = get_schuessler_plus_bentley_2015()
+    print('\tDone.')
+    print('len(schuessler) = ' + str(len(schuessler)) + ', len(bentley) = ' + str(len(bentley)))
+    print('\tlen(schuessler_plus) = ' + str(len(schuessler_plus)))
+
+def get_schuessler_plus_bentley_2015():
+    funct_name = 'get_schuessler_plus_bentley_2015()'
+    schuessler = get_schuessler_late_han_data()
+    bentley = parse_bentley_2015()
+    retval = []
+    not_in_schuessler = []
+    for b in bentley:
+        if b not in schuessler:
+            if bentley[b] != [] and bentley[b] != ['']:
+                schuessler[b] = bentley[b][:]
+    return schuessler
+
+def create_schuessler_plus_bentley_2015_file():
+    funct_name = 'create_schuessler_plus_bentley_2015_file()'
+    schuessler = readin_preparsed_schuessler_late_han_data()#get_schuessler_late_han_data()
+    bentley = get_parsed_bentley_2015_late_han_data()#parse_bentley_2015()
+    output_file = os.path.join(get_soas_code_dir(), 'hanproj', 'phonological_data', 'combo_schuessler2007_n_bentley2015.txt')
+    if os.path.isfile(output_file):
+        os.remove(output_file)
+    label_list = ['wf_graph','wf_pinyin', 'QY_IPA', 'LH_IPA', 'OCM_IPA']
+    note = '#important: data types (pinyin, qy_ipa, etc.) are tab (\\t) separated.'
+    note += '\'NEW_ENTRY\' separates different sets of pronunciation for the same character.'
+    append_line_to_utf8_file(output_file, '\t'.join(label_list))
+    append_line_to_utf8_file(output_file, note)
+    retval = []
+    not_in_schuessler = []
+    for b in bentley:
+        if b not in schuessler:
+            if bentley[b] != [] and bentley[b] != ['']:
+                schuessler[b] = ['\t\t' + bentley[b] + '\t']
+    for s in schuessler:
+        data_str = 'NEW_ENTRY'.join(schuessler[s])
+        append_line_to_utf8_file(output_file, s + '\t' + data_str)
+        print(s + ': ' + data_str)
+    return schuessler
+
+def readin_schuessler2007_n_bentley2015_combo():
+    funct_name = 'readin_schuessler2007_n_bentley2015_combo()'
+    input_file = os.path.join(get_soas_code_dir(), 'hanproj', 'phonological_data', 'combo_schuessler2007_n_bentley2015.txt')
+    if not os.path.isfile(input_file):
+        print(funct_name + ' ERROR: Invalid input file:' + input_file)
+        print('\tAborting.')
+        return {}
+    retval = {}
+    line_list = readlines_of_utf8_file(input_file)
+    for ll in line_list:
+        entry = ll.split('\t')[0]
+        data = ll.replace(entry + '\t', '')
+        if entry not in retval:
+            retval[entry] = []
+        retval[entry].append(data)
+    return retval
+
+def compare_schuessler_to_bentley_2015():
+    funct_name = 'compare_schuessler_to_bentley_2015()'
+    schuessler = get_schuessler_late_han_data()
+    bentley = parse_bentley_2015()
+    x = 1
+    #for s in schuessler:
+    #    print(s + ': ' + ''.join(schuessler[s]))
+    in_b_not_in_s = []
+    for b in bentley:
+        print(b + ': ' + ' '.join(bentley[b]))
+        if b.strip() and b not in schuessler:
+            if b not in in_b_not_in_s:
+                in_b_not_in_s.append(b)
+    print(str(len(in_b_not_in_s)) + ' entries in Bentley, but not in Schuessler.')
+
+class schuessler_n_bentley:
+    def __init__(self):
+        self.raw_dict = readin_schuessler2007_n_bentley2015_combo()
+        self.lhan_dict = {}
+        self.fill_lhan_dict()
+        self.class_name = 'schuessler_n_bentley'
+
+    def fill_lhan_dict(self, is_verbose=False):
+        funct_name = 'fill_lhan_dict()'
+        if not self.raw_dict:
+            print(self.class_name + '::' + funct_name + ' ERROR!')
+            msg = '\tMust first run ' + self.class_name + '::'
+            msg += 'readin_schuessler2007_n_bentley2015_combo()'
+            print('\t' + msg)
+            return
+        pron = []
+        for e in self.raw_dict:
+            if not is_hanzi(e):
+                if is_verbose:
+                    print('Not a hanzi: ' + e)
+                    print('\tSkipping.')
+                continue
+            edata = self.raw_dict[e][0]
+            if 'NEW_ENTRY' in edata:
+                edata = edata.split('NEW_ENTRY')
+            else:
+                edata = [edata]
+            for p in edata:
+                if is_verbose:
+                    print(e + ': ' + p)
+                p = p.split('\t')
+                if is_verbose:
+                    print('\tLHan: ' + p[2])
+                if e.strip() and e not in self.lhan_dict:
+                    self.lhan_dict[e] = []
+                x = p[2]
+                if p[2].strip():
+                    if ' ' in p[2]:
+                        pron = p[2].split(' ')
+                    else:
+                        pron = [p[2]]
+                    for subp in pron:
+                        if subp not in self.lhan_dict[e]:
+                            self.lhan_dict[e].append(subp)
+
+    def get_late_han(self, zi):
+        retval = []
+        if zi not in self.lhan_dict:
+            return retval
+        return self.lhan_dict[zi]
+
+    def get_entry_list(self):
+        return self.lhan_dict.keys()
+
+def analyze_schuessler_n_bentley_later_han():
+    funct_name = 'analyze_schuessler_n_bentley_later_han()'
+    lhan_dict = readin_schuessler2007_n_bentley2015_combo()
+    schuessler = schuessler_n_bentley()
+    entry_list = schuessler.get_entry_list()
+    for e in entry_list:
+        lhan = schuessler.get_late_han(e)
+        for lh in lhan:
+            initial, medial, final, pcoda = parse_schuessler_lhan_syllable(lh)
+            #if initial == 'X':
+            msg = initial + '-'
+            if medial.strip():
+                msg += medial + '-'
+            msg += final
+            if pcoda.strip():
+                msg += '-' + pcoda
+            print(e + ': ' + lh + '(' + msg + ')')
+        #print(e + ': ' + ', '.join(lhan))
+
+
+def is_this_the_initial(pinitial, reco):
+    return pinitial == reco[0:len(pinitial)]
+
+def get_initial_for_schuessler_lhan(reco):
+    return parse_schuessler_lhan_syllable(reco)
+
+def parse_schuessler_lhan_syllable(reco):
+    funct_name = 'parse_schuessler_lhan_syllable()'
+    initial = ''
+    if aspiration in reco:
+        initial = reco.split(aspiration)[0] + aspiration
+    else:
+        for pi in lhan_initials:
+            if is_this_the_initial(pi, reco):
+                initial = pi
+                break
+    if not initial.strip():
+        if reco[0] == 'w' or reco[0] == 'a':
+            initial = zero_initial
+        else:
+            initial = 'X'
+    final = reco[len(initial):len(reco)]
+    # if there is a medial, remove it from the final
+    medial = ''
+    if final[0] in lh_medials:
+        try:
+            if final[1] in lh_main_vowels:
+                medial = final[0]
+                final = final[1:len(final)]
+        except:
+            x = 1
+    pcoda = ''
+    if final[len(final)-1] in post_codas:
+        pcoda = final[len(final)-1]
+        final = final[0:len(final)-1]
+        x = 1
+         # if final[0] is in the medials AND
+        #  final[1] is in the main vowels, then final[0] IS a medial
+    return initial, medial, final, pcoda
+
+def get_schuessler_lhan_rhyme_from_reconstruction(reco):
+    funct_name = 'get_schuessler_lhan_rhyme_from_reconstruction()'
+
+def delete_file_if_it_exists(filename):
+    if os.path.isfile(filename):
+        os.remove(filename)
+
+def insert_rhyme_marker_at_pos(line, rhyme_pos, rhyme_marker):
+    if rhyme_pos == -1:
+        return line
+    try:
+        rhyme_char = line[rhyme_pos]
+    except IndexError as ie:
+        rhyme_char = '・'
+    if '・' in rhyme_char or '…' in rhyme_char or '□' in rhyme_char:
+        return line
+    if line[len(line)-1] == '）':
+        rhyme_pos = line.find('（') - 1
+    return line[0:rhyme_pos] + rhyme_marker + line[rhyme_pos:len(line)]
+
+def test_annotate_stele_inscription():
+    funct_name = 'test_annotate_stele_inscription()'
+    #D:\Ash\SOAS\code\data
+    file_num = '4'
+    input_file = os.path.join(get_soas_code_dir(), 'data', 'mao2008_test_poem' + file_num + '.txt')
+    output_file = os.path.join(get_soas_code_dir(), 'data', 'nannotated_mao2008_test_poem' + file_num + '.txt')
+    if 'mao2008_test_poem1.txt' in input_file:
+        s_id = 'mao2008_poem30'
+    elif 'mao2008_test_poem2.txt' in input_file:
+        s_id = 'mao2008_poem34'
+    elif 'mao2008_test_poem3.txt' in input_file:
+        s_id = 'mao2008_poem44'
+    elif 'mao2008_test_poem4.txt' in input_file:
+        s_id = 'mao2008_poem90'
+
+    delete_file_if_it_exists(output_file)
+    poem = readlines_of_utf8_file(input_file)
+    poem = poem[1:len(poem)]
+    for l in poem:
+        print(l)
+    s_id = 'mao2008_poem30'
+    rw_words = get_numbered_rhyme_words_from_stele_inscription(s_id, poem)
+    for line_k in rw_words:
+        msg_out = ''
+        for k in rw_words[line_k]:
+            tup_list = rw_words[line_k][k]
+            for tup in tup_list:
+                rw = tup[0]
+                rpos = tup[1]
+                orig_line = tup[2]
+                print(str(line_k) + ': ' + rw + ', ' + str(rpos) + ', ' + orig_line)
+                new_line = insert_rhyme_marker_at_pos(orig_line, rpos, 'a')
+                msg_out += new_line + '。'
+                #print('\t' + new_line)
+        print(msg_out) # output to annotated file
+
+#compare_schuessler_to_bentley_2015()
+#test_is_hanzi()
+#parse_bentley_2015()
 #cydifflib_test()
 #test_get_the_intersection_of_two_lists()
 #test_get_the_difference_of_two_lists()
@@ -2899,27 +4323,61 @@ def test_get_schuessler_late_han_for_glyph(glyph_list):
 #readin_kyomeishusei2015_han_mirror_data()
 
 #readin_mao_2008_stelae_data()
+
+#process_mao_2008_stelae_data()
+#process_kyomeishusei2015_han_mirror_data()
+
 #test_schuessler_phonological_data()
 
 #test_distance_between_tags()
 #test_handle_short_parens()
 
 #naively_annotate_han_dynasty_poems()
-process_kyomeishusei2015_han_mirror_data()
+
 
 #test_visualize_infomap_output()
 #explore_rhyme_structure_of_han_dynasty_poems()
 
-#test_get_schuessler_late_han_for_glyph(['貴','富'])#['光','明'])#['里','海','何'])#['門','山'])
+input = ['裔', '外', '界', '嵑', '世']
+#input = ['教', '吐']
+input = ['從', '羊', '光']
+#test_get_schuessler_late_han_for_glyph(input)
+#test_get_schuessler_late_han_for_glyph(['清','名', '生', '盈', '成', '聽'])#['光','明'])#['里','海','何'])#['門','山'])
 
 #clean_up_mou_n_zhong_2016_data() # bronzes
 #print_lu1983_dict()
 #readin_lu_1983_data()
 
-#parse_han_data_from_lu_1983() #------
+#parse_han_data_from_lu_1983()
 
 #get_list_of_author_names_from_lu_1983()
 
 #readin_raw_han_poetry()
 #test_get_arabic_num_given_chinese_num()
 #test_chinese_converter()
+
+
+#naively_annotate_mao_2008_stelae_data()
+
+#readin_kyomeishusei2015_han_mirror_data()
+#edit_kyomeishusei2015_han_mirror_data()
+#test_get_schuessler_plus_bentley_2015()
+
+#parse_bentley_2015()
+#get_parsed_bentley_2015_late_han_data()
+#create_schuessler_late_han_data_file()
+#readin_preparsed_schuessler_late_han_data()
+#create_schuessler_plus_bentley_2015_file()
+#readin_schuessler2007_n_bentley2015_combo()
+
+#analyze_schuessler_n_bentley_later_han()
+
+# TO DO
+#  - check how processor.process_mao_2008_stelae_data()
+#   is handling '：'
+#  - check output for 六〇：《景君碑》，東漢漢安二年（143）八月，p136
+#readin_mao_2008_stelae_data()
+
+test_multi_dataset_processor() #-----
+
+#test_annotate_stele_inscription()
