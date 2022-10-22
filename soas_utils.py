@@ -1,6 +1,24 @@
 #! C:\Python36\
 # -*- encoding: utf-8 -*-
 #
+#
+# Notes about the REWRITE:
+# 1. need filename object that takes care of all input and output files
+# 2. need poem data object that keeps track of stanza, data_type (received_shi, mirrors, stelae), meta data, etc.
+# 3. Functions parsing raw data should be called: parse_raw_{data source name}_data()
+# 4. Functions that read in parsed data should be called: readin_parsed_{data source name}_data()
+# 5. parse_raw_{data source name}() should be called from inside readin_parsed_{data source name}()
+#    and only run if the parsed data file does not exist
+# 6. Consider keeping a log file
+# 7. Overriding bracket operators [ ] in Python: https://stackoverflow.com/questions/1957780/how-to-override-the-operator-in-python
+# 8. Need overarching naming convention
+#    - when "graph" means the type of network you need to run com det algos, call it "nxgraph" or "nx_graph"
+#    - "rnetwork" only refers to the "rnetwork"
+#    - change all instances of "pvis" to "pyvis"
+#    - need to distinguish between "annotator" which literally puts markers in files vs. networks representing an annotator
+# 9. Change name of "processing_...()" files to "pre_com_det_processing(data_type)"
+
+
 # About this code:
 # 1. It is exploratory, not pre-designed
 # 2. The goal is to solve problems as quickly as possible. Any code that would need to be used
@@ -28,12 +46,63 @@ import sinopy
 import scipy
 import numpy
 import cydifflib
+from hanproj_filename_depot import filename_depot
 #from num_conversion import kansuji2arabic
 from soas_rnetwork_test import rnetwork
+from soas_rnetwork_test import calculate_edge_weight_given_num_rhymes
 from soas_rnetwork_test import let_this_char_become_node
 from soas_rnetwork_test import get_timestamp_for_filename
+from soas_rnetwork_test import delete_file_if_it_exists
+from soas_rnetwork_test import print_debug_message
 from soas_imported_from_py3 import readlines_of_utf8_file
-
+from soas_imported_from_py3 import get_soas_code_dir
+from soas_imported_from_py3 import get_phonological_data_dir
+from soas_imported_from_py3 import get_hanproj_dir
+from soas_network_utils import load_schuessler_data
+from soas_network_utils import lhan_initials
+from soas_network_utils import aspiration
+from soas_network_utils import zero_initial
+from soas_network_utils import post_codas
+from soas_network_utils import rhyme2color
+from soas_network_utils import utf8_bom_b
+from soas_network_utils import lh_main_vowels
+from soas_network_utils import lh_medials
+from soas_network_utils import get_schuessler_late_han_for_glyph
+from soas_network_utils import get_late_han_rhyme_for_glyph
+from soas_network_utils import parse_schuessler_late_han_syllable
+from soas_network_utils import get_rhyme_from_schuessler_late_han_syllable
+from soas_network_utils import readin_most_complete_schuessler_data
+from soas_network_utils import cleanup_ocm_ipa
+from soas_network_utils import cleanup_late_han_ipa
+from soas_network_utils import handle_short_parens
+from soas_network_utils import get_schuessler_late_han_data
+from soas_network_utils import sch_glyph2phonology
+from soas_network_utils import rhyme_color_tracker
+from soas_network_utils import readlines_of_utf8_file
+#from soas_network_utils import readin_results_of_community_detection
+from soas_network_utils import readin_community_detection_group_descriptions
+from soas_network_utils import get_rhyme_from_late_han
+from soas_network_utils import append_line_to_output_file
+#from soas_network_utils import get_com_det_group_descriptions_for_combo_data
+from soas_network_utils import group2color
+from soas_network_utils import is_hanzi
+from soas_network_utils import exception_chars
+from soas_network_utils import if_file_exists
+from soas_rhyme_net_structs import stanza_processor
+from soas_rhyme_net_structs import create_tree
+from soas_rhyme_net_structs import given_root_node_get_list_of_possible_paths
+from soas_rhyme_net_structs import retreive_path_from_nodes
+from soas_rhyme_net_structs import find_path_optimized_for_rhyme
+from soas_rhyme_net_structs import rhyme_marker
+from soas_rhyme_net_structs import if_special_mirror_punctuation
+from soas_rhyme_net_structs import append_line_to_utf8_file
+from soas_rhyme_net_structs import if_not_unicode_make_it_unicode
+from soas_rhyme_net_structs import is_unicode
+from soas_rhyme_net_structs import safe_open_utf8_file_for_appending
+from soas_rhyme_net_structs import get_rhyme_words_for_kmss2015_mirror_inscription
+from soas_rhyme_net_structs import grab_last_character_in_line
+from pyvis.network import Network
+from pyvis.options import EdgeOptions
 #import PyQt5
 from PIL import Image
 #from PIL.Image import core as _imaging
@@ -47,44 +116,13 @@ import matplotlib.pyplot as plt
 from infomap import Infomap
 from soas_imported_from_py3 import get_mc_data_for_char
 from soas_imported_from_py3 import is_kana_letter
+from anytree import Node, RenderTree, PreOrderIter, AsciiStyle
+from soas_tree_structure import get_list_of_fayin_paths
 # from: https://www.programcreek.com/python/example/89583/networkx.draw_networkx_labels
 plt.rcParams['font.sans-serif'] = ['SimHei']  # 步骤一（替换sans-serif字体）
 plt.rcParams['axes.unicode_minus'] = False  # 步骤二（解决坐标轴负数的负号显示问题）
 
-utf8_bom_b = b'\xef\xbb\xbf'
-
-lh_main_vowels = ['i', 'ɨ', 'y', 'u', 'e', 'o', 'ɑ', 'a', 'ə', 'ɛ', 'ɔ']
-lh_medials = ['i', 'ɨ', 'y', 'u']
-
-lhan_initials = ['dz', 'dẓ', 'dẓ', 'dź', 'tś', 'ts', 'tṣ', 'tṣ', 'd', 'ḍ', 'ḍ',
-                 'g', 'ɡ', 'h', 'j', 'k', 'Ɣ', 'ɣ', 'm', 'n', 'ń', 'ṇ', 'ṇ',
-                 'ŋ', 'b', 'p', 'r', 's', 'ṣ', 'ś', 't', 'ṭ', 'ṭ', 'x', 'z',
-                 'ź', 'l', 'ʔ', 'Ɂ']
-aspiration = 'ʰ'
-zero_initial = '∅'
-post_codas = ['s', 'h', 'ʔ', 'Ɂ', 'ᶜ', 'ᴮ']
-
-def get_soas_code_dir():
-    return os.path.join('D:' + os.sep + 'Ash', 'SOAS', 'code')
-
-def get_hanproj_dir():
-    return os.path.join(get_soas_code_dir(), 'hanproj')
-
-def get_mirrors_dir():
-    return os.path.join(get_hanproj_dir(), 'mirrors')
-
-def get_stelae_dir():
-    return os.path.join(get_hanproj_dir(), 'stelae')
-
-def get_received_shi_dir():
-    return os.path.join(get_hanproj_dir(), 'received-shi')
-
-def get_received_bronzes_dir():
-    return os.path.join(get_hanproj_dir(),'bronzes')
-
-def get_schuesslerhanchinese_dir():
-    return os.path.join(get_soas_code_dir(),'schuesslerhanchinese')
-
+punctuation = ['。', '、', '；', '{', '}', '*', '＊']
 
 # the mirror data has '\r' instead of '\r\n' or '\n'
 def readlines_of_utf8_file_for_mirror_data(filename):
@@ -104,19 +142,6 @@ def readlines_of_utf8_file_for_mirror_data(filename):
             retval.append(l)
     return retval
 
-def append_line_to_output_file(filename, line, is_verbose=False):
-    funct_name = 'append_line_to_output_file()'
-    new_line = '\n'
-    if line[len(line)-len(new_line): len(line)] == new_line:
-        line = line[0:len(line)-len(new_line)]
-    if os.path.exists(filename):
-        append_write = 'a+'  # append if already exists
-    else:
-        append_write = 'w+'  # make a new file if not
-    if is_verbose:
-        print(u'trying to write to ' + filename)
-    with codecs.open(filename, append_write, 'utf8') as f:
-        f.write(line + new_line)
 
 def readin_raw_han_poetry(is_verbose=False):
     funct_name = 'readin_raw_han_poetry()'
@@ -1257,46 +1282,6 @@ def remove_references_from_line(line):
 def remove_comment_from_line(line):
     return remove_part_of_line(line, '〖')
 
-simp2trad_var_dict = {}
-if 0:
-    def load_trad_variants_of_simp():
-        funct_name = 'load_trad_variants_of_simp()'
-        if simp2trad_var_dict:
-            return
-        if '𬬰' not in simp2trad_var_dict: #鎗
-            simp2trad_var_dict['𬬰'] = u'鎗'
-        base_dir = os.path.join('C:' + os.sep + u'Ash', 'research', 'code', 'python', 'data')
-        filename = os.path.join(base_dir, 'kTraditionalVariant.txt')
-        line_list = readlines_of_utf8_file(filename)
-        #input_ptr = codecs.open(base_dir + os.sep + filename, 'r', 'utf8')
-        delim = u' '
-        processed_vars = []
-        for line in line_list:
-            line = line.strip()
-            if line and line[0] == '#':
-                continue
-            pos = line.find('\t')
-            if pos > -1:
-                entry_ncr = line[0:pos]
-                entry_glyph = convert_ncr_to_glyph(entry_ncr)
-                variant_ncrs = line[pos+1:len(line)]
-                variant_ncrs = variant_ncrs.replace('U+', u'')
-                variant_ncrs = variant_ncrs.split(' ')
-                processed_vars[:] = []
-    #            print u'entry=' + entry_glyph
-                for v in variant_ncrs:
-                    var_glyph = convert_ncr_to_glyph(v)
-    #                print u'var_glyph = ' + var_glyph
-                    processed_vars.append(var_glyph)
-                if entry_glyph not in simp2trad_var_dict.keys():
-                    simp2trad_var_dict[entry_glyph] = []
-                    for v in processed_vars:
-                        simp2trad_var_dict[entry_glyph].append(v)
-                else:
-                    simp2trad_var_dict[entry_glyph].append(processed_vars)
-
-
-
 #
 # Installed the Chinese-converter library (https://pypi.org/project/chinese-converter/)
 # Installation was done via the command line in the virtual env: /cygdrive/c/users/ash/vm4pdf/
@@ -1432,17 +1417,16 @@ def clean_up_mou_n_zhong_2016_data():
     for bronze_name in cat2type2data_dict[category][btype]:
         print(bronze_name)
     print(str(len(cat2type2data_dict[category][btype])) + ' bronze names.')
-    if 0:
-        for k1 in cat2type2cnt_dict:
-            for k2 in cat2type2cnt_dict[k1]:
-                print('cat2type2cnt_dict[' + k1 + '][' + k2 + '] = ' + str(cat2type2cnt_dict[k1][k2]))
+
 btype_dict = {}
 def readin_bronze_type_dict(verbose=False):
     funct_name = 'readin_bronze_type_dict()'
     global btype_dict
     if btype_dict:
         return
-    input_file = os.path.join(get_received_bronzes_dir(), 'raw', 'Abbyy', 'indexing-data.txt')
+    filename_storage = filename_depot()
+    bronzes_dir = filename_storage.get_received_bronzes_dir()
+    input_file = os.path.join(bronzes_dir, 'raw', 'Abbyy', 'indexing-data.txt')
     line_list = readlines_of_utf8_file(input_file)
     bronze_category_pos = 0
     bronze_type_pos = 1
@@ -1460,13 +1444,6 @@ def readin_bronze_type_dict(verbose=False):
         for k in btype_dict:
             print('btype_dict[' + k + '] = ' + ', '.join(btype_dict[k]))
 
-def get_gbk():
-    return "\u9515\u7691\u853c\u788d\u7231\u55f3\u5ad2\u7477\u66a7\u972d\u8c19\u94f5\u9e4c\u80ae\u8884\u5965\u5aaa\u9a9c\u9ccc\u575d\u7f62\u94af\u6446\u8d25\u5457\u9881\u529e\u7eca\u94a3\u5e2e\u7ed1\u9551\u8c24\u5265\u9971\u5b9d\u62a5\u9c8d\u9e28\u9f85\u8f88\u8d1d\u94a1\u72c8\u5907\u60eb\u9e4e\u8d32\u951b\u7ef7\u7b14\u6bd5\u6bd9\u5e01\u95ed\u835c\u54d4\u6ed7\u94cb\u7b5a\u8df8\u8fb9\u7f16\u8d2c\u53d8\u8fa9\u8fab\u82c4\u7f0f\u7b3e\u6807\u9aa0\u98d1\u98d9\u9556\u9573\u9cd4\u9cd6\u522b\u762a\u6fd2\u6ee8\u5bbe\u6448\u50a7\u7f24\u69df\u6ba1\u8191\u9554\u9acc\u9b13\u997c\u7980\u62e8\u94b5\u94c2\u9a73\u997d\u94b9\u9e41\u8865\u94b8\u8d22\u53c2\u8695\u6b8b\u60ed\u60e8\u707f\u9a96\u9eea\u82cd\u8231\u4ed3\u6ca7\u5395\u4fa7\u518c\u6d4b\u607b\u5c42\u8be7\u9538\u4faa\u9497\u6400\u63ba\u8749\u998b\u8c17\u7f20\u94f2\u4ea7\u9610\u98a4\u5181\u8c04\u8c36\u8487\u5fcf\u5a75\u9aa3\u89c7\u7985\u9561\u573a\u5c1d\u957f\u507f\u80a0\u5382\u7545\u4f25\u82cc\u6005\u960a\u9cb3\u949e\u8f66\u5f7b\u7817\u5c18\u9648\u886c\u4f27\u8c0c\u6987\u789c\u9f80\u6491\u79f0\u60e9\u8bda\u9a8b\u67a8\u67fd\u94d6\u94db\u75f4\u8fdf\u9a70\u803b\u9f7f\u70bd\u996c\u9e31\u51b2\u51b2\u866b\u5ba0\u94f3\u7574\u8e0c\u7b79\u7ef8\u4fe6\u5e31\u96e0\u6a71\u53a8\u9504\u96cf\u7840\u50a8\u89e6\u5904\u520d\u7ecc\u8e70\u4f20\u948f\u75ae\u95ef\u521b\u6006\u9524\u7f0d\u7eaf\u9e51\u7ef0\u8f8d\u9f8a\u8f9e\u8bcd\u8d50\u9e5a\u806a\u8471\u56f1\u4ece\u4e1b\u82c1\u9aa2\u679e\u51d1\u8f8f\u8e7f\u7a9c\u64ba\u9519\u9509\u9e7e\u8fbe\u54d2\u9791\u5e26\u8d37\u9a80\u7ed0\u62c5\u5355\u90f8\u63b8\u80c6\u60ee\u8bde\u5f39\u6b9a\u8d55\u7605\u7baa\u5f53\u6321\u515a\u8361\u6863\u8c20\u7800\u88c6\u6363\u5c9b\u7977\u5bfc\u76d7\u7118\u706f\u9093\u956b\u654c\u6da4\u9012\u7f14\u7c74\u8bcb\u8c1b\u7ee8\u89cc\u955d\u98a0\u70b9\u57ab\u7535\u5dc5\u94bf\u766b\u9493\u8c03\u94eb\u9cb7\u8c0d\u53e0\u9cbd\u9489\u9876\u952d\u8ba2\u94e4\u4e22\u94e5\u4e1c\u52a8\u680b\u51bb\u5cbd\u9e2b\u7aa6\u728a\u72ec\u8bfb\u8d4c\u9540\u6e0e\u691f\u724d\u7b03\u9ee9\u953b\u65ad\u7f0e\u7c16\u5151\u961f\u5bf9\u603c\u9566\u5428\u987f\u949d\u7096\u8db8\u593a\u5815\u94ce\u9e45\u989d\u8bb9\u6076\u997f\u8c14\u57a9\u960f\u8f6d\u9507\u9537\u9e57\u989a\u989b\u9cc4\u8bf6\u513f\u5c14\u9975\u8d30\u8fe9\u94d2\u9e38\u9c95\u53d1\u7f5a\u9600\u73d0\u77fe\u9492\u70e6\u8d29\u996d\u8bbf\u7eba\u94ab\u9c82\u98de\u8bfd\u5e9f\u8d39\u7eef\u9544\u9cb1\u7eb7\u575f\u594b\u6124\u7caa\u507e\u4e30\u67ab\u950b\u98ce\u75af\u51af\u7f1d\u8bbd\u51e4\u6ca3\u80a4\u8f90\u629a\u8f85\u8d4b\u590d\u8d1f\u8ba3\u5987\u7f1a\u51eb\u9a78\u7ec2\u7ecb\u8d59\u9eb8\u9c8b\u9cc6\u9486\u8be5\u9499\u76d6\u8d45\u6746\u8d76\u79c6\u8d63\u5c34\u64c0\u7ec0\u5188\u521a\u94a2\u7eb2\u5c97\u6206\u9550\u777e\u8bf0\u7f1f\u9506\u6401\u9e3d\u9601\u94ec\u4e2a\u7ea5\u9549\u988d\u7ed9\u4e98\u8d53\u7ee0\u9ca0\u9f9a\u5bab\u5de9\u8d21\u94a9\u6c9f\u82df\u6784\u8d2d\u591f\u8bdf\u7f11\u89cf\u86ca\u987e\u8bc2\u6bc2\u94b4\u9522\u9e2a\u9e44\u9e58\u5250\u6302\u9e39\u63b4\u5173\u89c2\u9986\u60ef\u8d2f\u8bd6\u63bc\u9e73\u9ccf\u5e7f\u72b7\u89c4\u5f52\u9f9f\u95fa\u8f68\u8be1\u8d35\u523d\u5326\u523f\u59ab\u6867\u9c91\u9cdc\u8f8a\u6eda\u886e\u7ef2\u9ca7\u9505\u56fd\u8fc7\u57da\u5459\u5e3c\u6901\u8748\u94ea\u9a87\u97e9\u6c49\u961a\u7ed7\u9889\u53f7\u704f\u98a2\u9602\u9e64\u8d3a\u8bc3\u9616\u86ce\u6a2a\u8f70\u9e3f\u7ea2\u9ec9\u8ba7\u836d\u95f3\u9c8e\u58f6\u62a4\u6caa\u6237\u6d52\u9e55\u54d7\u534e\u753b\u5212\u8bdd\u9a85\u6866\u94e7\u6000\u574f\u6b22\u73af\u8fd8\u7f13\u6362\u5524\u75ea\u7115\u6da3\u5942\u7f33\u953e\u9ca9\u9ec4\u8c0e\u9cc7\u6325\u8f89\u6bc1\u8d3f\u79fd\u4f1a\u70e9\u6c47\u8bb3\u8bf2\u7ed8\u8bd9\u835f\u54d5\u6d4d\u7f0b\u73f2\u6656\u8364\u6d51\u8be8\u9984\u960d\u83b7\u8d27\u7978\u94ac\u956c\u51fb\u673a\u79ef\u9965\u8ff9\u8ba5\u9e21\u7ee9\u7f09\u6781\u8f91\u7ea7\u6324\u51e0\u84df\u5242\u6d4e\u8ba1\u8bb0\u9645\u7ee7\u7eaa\u8ba6\u8bd8\u8360\u53fd\u54dc\u9aa5\u7391\u89ca\u9f51\u77f6\u7f81\u867f\u8dfb\u9701\u9c9a\u9cab\u5939\u835a\u988a\u8d3e\u94be\u4ef7\u9a7e\u90cf\u6d43\u94d7\u9553\u86f2\u6b7c\u76d1\u575a\u7b3a\u95f4\u8270\u7f04\u8327\u68c0\u78b1\u7877\u62e3\u6361\u7b80\u4fed\u51cf\u8350\u69db\u9274\u8df5\u8d31\u89c1\u952e\u8230\u5251\u996f\u6e10\u6e85\u6da7\u8c0f\u7f23\u620b\u622c\u7751\u9e63\u7b15\u9ca3\u97af\u5c06\u6d46\u848b\u6868\u5956\u8bb2\u9171\u7edb\u7f30\u80f6\u6d47\u9a84\u5a07\u6405\u94f0\u77eb\u4fa5\u811a\u997a\u7f34\u7ede\u8f7f\u8f83\u6322\u5ce4\u9e6a\u9c9b\u9636\u8282\u6d01\u7ed3\u8beb\u5c4a\u7596\u988c\u9c92\u7d27\u9526\u4ec5\u8c28\u8fdb\u664b\u70ec\u5c3d\u52b2\u8346\u830e\u537a\u8369\u9991\u7f19\u8d46\u89d0\u9cb8\u60ca\u7ecf\u9888\u9759\u955c\u5f84\u75c9\u7ade\u51c0\u522d\u6cfe\u8ff3\u5f2a\u80eb\u9753\u7ea0\u53a9\u65e7\u9604\u9e20\u9e6b\u9a79\u4e3e\u636e\u952f\u60e7\u5267\u8bb5\u5c66\u6989\u98d3\u949c\u9514\u7aad\u9f83\u9e43\u7ee2\u9529\u954c\u96bd\u89c9\u51b3\u7edd\u8c32\u73cf\u94a7\u519b\u9a8f\u76b2\u5f00\u51ef\u5240\u57b2\u5ffe\u607a\u94e0\u9534\u9f9b\u95f6\u94aa\u94d0\u9897\u58f3\u8bfe\u9a92\u7f02\u8f72\u94b6\u951e\u9894\u57a6\u6073\u9f88\u94ff\u62a0\u5e93\u88e4\u55be\u5757\u4fa9\u90d0\u54d9\u810d\u5bbd\u72ef\u9acb\u77ff\u65f7\u51b5\u8bd3\u8bf3\u909d\u5739\u7ea9\u8d36\u4e8f\u5cbf\u7aa5\u9988\u6e83\u532e\u8489\u6126\u8069\u7bd1\u9603\u951f\u9cb2\u6269\u9614\u86f4\u8721\u814a\u83b1\u6765\u8d56\u5d03\u5f95\u6d9e\u6fd1\u8d49\u7750\u94fc\u765e\u7c41\u84dd\u680f\u62e6\u7bee\u9611\u5170\u6f9c\u8c30\u63fd\u89c8\u61d2\u7f06\u70c2\u6ee5\u5c9a\u6984\u6593\u9567\u8934\u7405\u9606\u9512\u635e\u52b3\u6d9d\u5520\u5d02\u94d1\u94f9\u75e8\u4e50\u9cd3\u956d\u5792\u7c7b\u6cea\u8bd4\u7f27\u7bf1\u72f8\u79bb\u9ca4\u793c\u4e3d\u5389\u52b1\u783e\u5386\u6ca5\u96b6\u4fea\u90e6\u575c\u82c8\u8385\u84e0\u5456\u9026\u9a8a\u7f21\u67a5\u680e\u8f79\u783a\u9502\u9e42\u75a0\u7c9d\u8dde\u96f3\u9ca1\u9ce2\u4fe9\u8054\u83b2\u8fde\u9570\u601c\u6d9f\u5e18\u655b\u8138\u94fe\u604b\u70bc\u7ec3\u8539\u5941\u6f4b\u740f\u6b93\u88e2\u88e3\u9ca2\u7cae\u51c9\u4e24\u8f86\u8c05\u9b49\u7597\u8fbd\u9563\u7f2d\u948c\u9e69\u730e\u4e34\u90bb\u9cde\u51db\u8d41\u853a\u5eea\u6aa9\u8f9a\u8e8f\u9f84\u94c3\u7075\u5cad\u9886\u7eeb\u68c2\u86cf\u9cae\u998f\u5218\u6d4f\u9a9d\u7efa\u954f\u9e68\u9f99\u804b\u5499\u7b3c\u5784\u62e2\u9647\u830f\u6cf7\u73d1\u680a\u80e7\u783b\u697c\u5a04\u6402\u7bd3\u507b\u848c\u55bd\u5d5d\u9542\u7618\u8027\u877c\u9ac5\u82a6\u5362\u9885\u5e90\u7089\u63b3\u5364\u864f\u9c81\u8d42\u7984\u5f55\u9646\u5786\u64b8\u565c\u95fe\u6cf8\u6e0c\u680c\u6a79\u8f73\u8f82\u8f98\u6c07\u80ea\u9e2c\u9e6d\u823b\u9c88\u5ce6\u631b\u5b6a\u6ee6\u4e71\u8114\u5a08\u683e\u9e3e\u92ae\u62a1\u8f6e\u4f26\u4ed1\u6ca6\u7eb6\u8bba\u56f5\u841d\u7f57\u903b\u9523\u7ba9\u9aa1\u9a86\u7edc\u8366\u7321\u6cfa\u6924\u8136\u9559\u9a74\u5415\u94dd\u4fa3\u5c61\u7f15\u8651\u6ee4\u7eff\u6988\u891b\u950a\u5452\u5988\u739b\u7801\u8682\u9a6c\u9a82\u5417\u551b\u5b37\u6769\u4e70\u9ea6\u5356\u8fc8\u8109\u52a2\u7792\u9992\u86ee\u6ee1\u8c29\u7f26\u9558\u98a1\u9cd7\u732b\u951a\u94c6\u8d38\u9ebd\u6ca1\u9541\u95e8\u95f7\u4eec\u626a\u7116\u61d1\u9494\u9530\u68a6\u772f\u8c1c\u5f25\u89c5\u5e42\u8288\u8c27\u7315\u7962\u7ef5\u7f05\u6e11\u817c\u9efe\u5e99\u7f08\u7f2a\u706d\u60af\u95fd\u95f5\u7f17\u9e23\u94ed\u8c2c\u8c1f\u84e6\u998d\u6b81\u9546\u8c0b\u4ea9\u94bc\u5450\u94a0\u7eb3\u96be\u6320\u8111\u607c\u95f9\u94d9\u8bb7\u9981\u5185\u62df\u817b\u94cc\u9cb5\u64b5\u8f87\u9cb6\u917f\u9e1f\u8311\u8885\u8042\u556e\u954a\u954d\u9667\u8616\u55eb\u989f\u8e51\u67e0\u72de\u5b81\u62e7\u6cde\u82ce\u549b\u804d\u94ae\u7ebd\u8113\u6d53\u519c\u4fac\u54dd\u9a7d\u9495\u8bfa\u50a9\u759f\u6b27\u9e25\u6bb4\u5455\u6ca4\u8bb4\u6004\u74ef\u76d8\u8e52\u5e9e\u629b\u75b1\u8d54\u8f94\u55b7\u9e4f\u7eb0\u7f74\u94cd\u9a97\u8c1d\u9a88\u98d8\u7f25\u9891\u8d2b\u5ad4\u82f9\u51ed\u8bc4\u6cfc\u9887\u948b\u6251\u94fa\u6734\u8c31\u9564\u9568\u6816\u8110\u9f50\u9a91\u5c82\u542f\u6c14\u5f03\u8bab\u8572\u9a90\u7eee\u6864\u789b\u9880\u9883\u9ccd\u7275\u948e\u94c5\u8fc1\u7b7e\u8c26\u94b1\u94b3\u6f5c\u6d45\u8c34\u5811\u4f65\u8368\u60ad\u9a9e\u7f31\u6920\u94a4\u67aa\u545b\u5899\u8537\u5f3a\u62a2\u5af1\u6a2f\u6217\u709d\u9516\u9535\u956a\u7f9f\u8dc4\u9539\u6865\u4e54\u4fa8\u7fd8\u7a8d\u8bee\u8c2f\u835e\u7f32\u7857\u8df7\u7a83\u60ec\u9532\u7ba7\u94a6\u4eb2\u5bdd\u9513\u8f7b\u6c22\u503e\u9877\u8bf7\u5e86\u63ff\u9cad\u743c\u7a77\u8315\u86f1\u5def\u8d47\u866e\u9cc5\u8d8b\u533a\u8eaf\u9a71\u9f8b\u8bce\u5c96\u9612\u89d1\u9e32\u98a7\u6743\u529d\u8be0\u7efb\u8f81\u94e8\u5374\u9e4a\u786e\u9615\u9619\u60ab\u8ba9\u9976\u6270\u7ed5\u835b\u5a06\u6861\u70ed\u97e7\u8ba4\u7eab\u996a\u8f6b\u8363\u7ed2\u5d58\u877e\u7f1b\u94f7\u98a6\u8f6f\u9510\u86ac\u95f0\u6da6\u6d12\u8428\u98d2\u9cc3\u8d5b\u4f1e\u6bf5\u7cc1\u4e27\u9a9a\u626b\u7f2b\u6da9\u556c\u94ef\u7a51\u6740\u5239\u7eb1\u94e9\u9ca8\u7b5b\u6652\u917e\u5220\u95ea\u9655\u8d61\u7f2e\u8baa\u59d7\u9a9f\u9490\u9cdd\u5892\u4f24\u8d4f\u57a7\u6b87\u89de\u70e7\u7ecd\u8d4a\u6444\u6151\u8bbe\u538d\u6ee0\u7572\u7ec5\u5ba1\u5a76\u80be\u6e17\u8bdc\u8c02\u6e16\u58f0\u7ef3\u80dc\u5e08\u72ee\u6e7f\u8bd7\u65f6\u8680\u5b9e\u8bc6\u9a76\u52bf\u9002\u91ca\u9970\u89c6\u8bd5\u8c25\u57d8\u83b3\u5f11\u8f7c\u8d33\u94c8\u9ca5\u5bff\u517d\u7ef6\u67a2\u8f93\u4e66\u8d4e\u5c5e\u672f\u6811\u7ad6\u6570\u6445\u7ebe\u5e05\u95e9\u53cc\u8c01\u7a0e\u987a\u8bf4\u7855\u70c1\u94c4\u4e1d\u9972\u53ae\u9a77\u7f0c\u9536\u9e36\u8038\u6002\u9882\u8bbc\u8bf5\u64de\u85ae\u998a\u98d5\u953c\u82cf\u8bc9\u8083\u8c21\u7a23\u867d\u968f\u7ee5\u5c81\u8c07\u5b59\u635f\u7b0b\u836a\u72f2\u7f29\u7410\u9501\u5522\u7743\u736d\u631e\u95fc\u94ca\u9cce\u53f0\u6001\u949b\u9c90\u644a\u8d2a\u762b\u6ee9\u575b\u8c2d\u8c08\u53f9\u6619\u94bd\u952c\u9878\u6c64\u70eb\u50a5\u9967\u94f4\u9557\u6d9b\u7ee6\u8ba8\u97ec\u94fd\u817e\u8a8a\u9511\u9898\u4f53\u5c49\u7f07\u9e48\u9617\u6761\u7c9c\u9f86\u9ca6\u8d34\u94c1\u5385\u542c\u70c3\u94dc\u7edf\u6078\u5934\u94ad\u79c3\u56fe\u948d\u56e2\u629f\u9893\u8715\u9968\u8131\u9e35\u9a6e\u9a7c\u692d\u7ba8\u9f0d\u889c\u5a32\u817d\u5f2f\u6e7e\u987d\u4e07\u7ea8\u7efe\u7f51\u8f8b\u97e6\u8fdd\u56f4\u4e3a\u6f4d\u7ef4\u82c7\u4f1f\u4f2a\u7eac\u8c13\u536b\u8bff\u5e0f\u95f1\u6ca9\u6da0\u73ae\u97ea\u709c\u9c94\u6e29\u95fb\u7eb9\u7a33\u95ee\u960c\u74ee\u631d\u8717\u6da1\u7a9d\u5367\u83b4\u9f8c\u545c\u94a8\u4e4c\u8bec\u65e0\u829c\u5434\u575e\u96fe\u52a1\u8bef\u90ac\u5e91\u6003\u59a9\u9a9b\u9e49\u9e5c\u9521\u727a\u88ad\u4e60\u94e3\u620f\u7ec6\u9969\u960b\u73ba\u89cb\u867e\u8f96\u5ce1\u4fa0\u72ed\u53a6\u5413\u7856\u9c9c\u7ea4\u8d24\u8854\u95f2\u663e\u9669\u73b0\u732e\u53bf\u9985\u7fa1\u5baa\u7ebf\u82cb\u83b6\u85d3\u5c98\u7303\u5a34\u9e47\u75eb\u869d\u7c7c\u8df9\u53a2\u9576\u4e61\u8be6\u54cd\u9879\u8297\u9977\u9aa7\u7f03\u98e8\u8427\u56a3\u9500\u6653\u5578\u54d3\u6f47\u9a81\u7ee1\u67ad\u7bab\u534f\u631f\u643a\u80c1\u8c10\u5199\u6cfb\u8c22\u4eb5\u64b7\u7ec1\u7f2c\u950c\u8845\u5174\u9649\u8365\u51f6\u6c79\u9508\u7ee3\u9990\u9e3a\u865a\u5618\u987b\u8bb8\u53d9\u7eea\u7eed\u8be9\u987c\u8f69\u60ac\u9009\u7663\u7eda\u8c16\u94c9\u955f\u5b66\u8c11\u6cf6\u9cd5\u52cb\u8be2\u5bfb\u9a6f\u8bad\u8baf\u900a\u57d9\u6d54\u9c9f\u538b\u9e26\u9e2d\u54d1\u4e9a\u8bb6\u57ad\u5a05\u6860\u6c29\u9609\u70df\u76d0\u4e25\u5ca9\u989c\u960e\u8273\u538c\u781a\u5f66\u8c1a\u9a8c\u53a3\u8d5d\u4fe8\u5156\u8c33\u6079\u95eb\u917d\u9b47\u990d\u9f39\u9e2f\u6768\u626c\u75a1\u9633\u75d2\u517b\u6837\u7080\u7476\u6447\u5c27\u9065\u7a91\u8c23\u836f\u8f7a\u9e5e\u9cd0\u7237\u9875\u4e1a\u53f6\u9765\u8c12\u90ba\u6654\u70e8\u533b\u94f1\u9890\u9057\u4eea\u8681\u827a\u4ebf\u5fc6\u4e49\u8be3\u8bae\u8c0a\u8bd1\u5f02\u7ece\u8bd2\u5453\u5cc4\u9974\u603f\u9a7f\u7f22\u8f76\u8d3b\u9487\u9552\u9571\u7617\u8223\u836b\u9634\u94f6\u996e\u9690\u94df\u763e\u6a31\u5a74\u9e70\u5e94\u7f28\u83b9\u8424\u8425\u8367\u8747\u8d62\u9896\u8314\u83ba\u8426\u84e5\u6484\u5624\u6ee2\u6f46\u748e\u9e66\u763f\u988f\u7f42\u54df\u62e5\u4f63\u75c8\u8e0a\u548f\u955b\u4f18\u5fe7\u90ae\u94c0\u72b9\u8bf1\u83b8\u94d5\u9c7f\u8206\u9c7c\u6e14\u5a31\u4e0e\u5c7f\u8bed\u72f1\u8a89\u9884\u9a6d\u4f1b\u4fe3\u8c00\u8c15\u84e3\u5d5b\u996b\u9608\u59aa\u7ea1\u89ce\u6b24\u94b0\u9e46\u9e6c\u9f89\u9e33\u6e0a\u8f95\u56ed\u5458\u5706\u7f18\u8fdc\u6a7c\u9e22\u9f0b\u7ea6\u8dc3\u94a5\u7ca4\u60a6\u9605\u94ba\u90e7\u5300\u9668\u8fd0\u8574\u915d\u6655\u97f5\u90d3\u82b8\u607d\u6120\u7ead\u97eb\u6b92\u6c32\u6742\u707e\u8f7d\u6512\u6682\u8d5e\u74d2\u8db1\u933e\u8d43\u810f\u9a75\u51ff\u67a3\u8d23\u62e9\u5219\u6cfd\u8d5c\u5567\u5e3b\u7ba6\u8d3c\u8c2e\u8d60\u7efc\u7f2f\u8f67\u94e1\u95f8\u6805\u8bc8\u658b\u503a\u6be1\u76cf\u65a9\u8f97\u5d2d\u6808\u6218\u7efd\u8c35\u5f20\u6da8\u5e10\u8d26\u80c0\u8d75\u8bcf\u948a\u86f0\u8f99\u9517\u8fd9\u8c2a\u8f84\u9e67\u8d1e\u9488\u4fa6\u8bca\u9547\u9635\u6d48\u7f1c\u6862\u8f78\u8d48\u796f\u9e29\u6323\u7741\u72f0\u4e89\u5e27\u75c7\u90d1\u8bc1\u8be4\u5ce5\u94b2\u94ee\u7b5d\u7ec7\u804c\u6267\u7eb8\u631a\u63b7\u5e1c\u8d28\u6ede\u9a98\u6809\u6800\u8f75\u8f7e\u8d3d\u9e37\u86f3\u7d77\u8e2c\u8e2f\u89ef\u949f\u7ec8\u79cd\u80bf\u4f17\u953a\u8bcc\u8f74\u76b1\u663c\u9aa4\u7ea3\u7ec9\u732a\u8bf8\u8bdb\u70db\u77a9\u5631\u8d2e\u94f8\u9a7b\u4f2b\u69e0\u94e2\u4e13\u7816\u8f6c\u8d5a\u556d\u9994\u989e\u6869\u5e84\u88c5\u5986\u58ee\u72b6\u9525\u8d58\u5760\u7f00\u9a93\u7f12\u8c06\u51c6\u7740\u6d4a\u8bfc\u956f\u5179\u8d44\u6e0d\u8c18\u7f01\u8f8e\u8d40\u7726\u9531\u9f87\u9cbb\u8e2a\u603b\u7eb5\u506c\u90b9\u8bf9\u9a7a\u9cb0\u8bc5\u7ec4\u955e\u94bb\u7f35\u8e9c\u9cdf\u7ff1\u5e76\u535c\u6c89\u4e11\u6dc0\u8fed\u6597\u8303\u5e72\u768b\u7845\u67dc\u540e\u4f19\u79f8\u6770\u8bc0\u5938\u91cc\u51cc\u4e48\u9709\u637b\u51c4\u6266\u5723\u5c38\u62ac\u6d82\u6d3c\u5582\u6c61\u9528\u54b8\u874e\u5f5d\u6d8c\u6e38\u5401\u5fa1\u613f\u5cb3\u4e91\u7076\u624e\u672d\u7b51\u4e8e\u5fd7\u6ce8\u51cb\u8ba0\u8c2b\u90c4\u52d0\u51fc\u5742\u5785\u57b4\u57ef\u57dd\u82d8\u836c\u836e\u839c\u83bc\u83f0\u85c1\u63f8\u5412\u5423\u5494\u549d\u54b4\u5658\u567c\u56af\u5e5e\u5c99\u5d74\u5f77\u5fbc\u72b8\u72cd\u9980\u9987\u9993\u9995\u6123\u61b7\u61d4\u4e2c\u6e86\u6edf\u6eb7\u6f24\u6f74\u6fb9\u752f\u7e9f\u7ed4\u7ef1\u73c9\u67a7\u684a\u6849\u69d4\u6a65\u8f71\u8f77\u8d4d\u80b7\u80e8\u98da\u7173\u7145\u7198\u610d\u6dfc\u781c\u78d9\u770d\u949a\u94b7\u94d8\u94de\u9503\u950d\u950e\u950f\u9518\u951d\u952a\u952b\u953f\u9545\u954e\u9562\u9565\u9569\u9572\u7a06\u9e4b\u9e5b\u9e71\u75ac\u75b4\u75d6\u766f\u88e5\u8941\u8022\u98a5\u87a8\u9eb4\u9c85\u9c86\u9c87\u9c9e\u9cb4\u9cba\u9cbc\u9cca\u9ccb\u9cd8\u9cd9\u9792\u97b4\u9f44"
-
-def sinopy_test():
-    import sinopy
-    gbk = get_gbk()
-    print(str(len(gbk)))
 
 #NOTE: the sinopy.gbk2big5() does not convert between the gbk and big5 encodings. It converts utf8 trad characters to utf8 simp characters
 def simp2trad(simp):
@@ -1580,6 +1557,9 @@ def cydifflib_test():
     print('SequenceMatcher(' + str_b + ', ' + str_c + ').ratio() = ' + str(x4))
     #cydifflib.get_close_matches()
 
+#
+# Lu1983 has data from eras other than the Han
+# This function only gets the Han era data
 def parse_han_data_from_lu_1983():
     funct_name = 'parse_han_data_from_lu_1983()'
     is_verbose = False
@@ -1611,42 +1591,59 @@ lu1983_dict = {}
 lu1983_labels = []
 #
 # Purpose:
-#   read in Lu 1983 data from pre-processed file
+#   -read in Lu 1983 data from pre-processed file
+#   -put data into a dictionary where:
+#     key = poem's unique ID
+#     value = poem
+#   -the dictionary is global, and is called 'lu1983_dict'
 def readin_lu_1983_data(is_verbose=False):
     funct_name = 'readin_lu_1983_data()'
     global lu1983_dict
     global lu1983_labels
     if lu1983_dict:
         return lu1983_labels
-    input_file = os.path.join(get_received_shi_dir(), 'parsed-Lu-1983-先秦漢魏晉南北朝詩.txt')
-    if not os.path.isfile(input_file):
-        print(funct_name + ' ERROR: Input file INVALID!')
-        print('\t' + input_file)
+    filename_storage = filename_depot()
+    input_file = os.path.join(filename_storage.get_received_shi_dir(), 'parsed-Lu-1983-先秦漢魏晉南北朝詩.txt')
+    if not is_file_valid(input_file, funct_name):
         return []
+    uniqid2poem_dict = {}
+    #if not os.path.isfile(input_file):
+    #    print(funct_name + ' ERROR: Input file INVALID!')
+    #    print('\t' + input_file)
+    #    return []
     line_list = readlines_of_utf8_file(input_file)
     lu1983_labels = line_list[0][:]
+    LU_poem = lu1983_poem()
+    LU_poem.set_data_labels(lu1983_labels)
+    uniqid2poem_dict = {}
+
     line_list = line_list[1:len(line_list)]
     for l in line_list:
         if is_verbose:
             print(l)
-        if '莫莫高山。' in l:
+        if '彭子陽歌' in l:
             x = 1
         l = l.split('\t')
         unique_id = l[0]
         l = l[1:len(l)]
         lu1983_dict[unique_id] = '\t'.join(l)
-    return lu1983_labels
+        LU_poem.set_data_with_line_from_file(unique_id, lu1983_dict[unique_id])
+        if unique_id not in uniqid2poem_dict:
+            uniqid2poem_dict[unique_id] = ''
+        uniqid2poem_dict[unique_id] = deepcopy(LU_poem)
+    return uniqid2poem_dict
+
+def is_file_valid(file, calling_function):
+    retval = False
+    is_verbose = True
+    if not os.path.isfile(file):
+        message2user(calling_function + ' ERROR: Input file INVALID! ', is_verbose)
+        message2user('\t' + file, is_verbose)
+    else:
+        retval = True
+    return retval
 
 schuessler = ''
-def load_schuessler_data():
-    global schuessler
-    if schuessler:
-        return
-    schuessler = sch_glyph2phonology()
-
-def get_schuessler_late_han_for_glyph(glyph):
-    load_schuessler_data()
-    return schuessler.get_late_han(glyph)
 
 def explore_rhyme_structure_of_han_dynasty_poems():
     funct_name = 'explore_rhyme_structure_of_han_dynasty_poems()'
@@ -1678,19 +1675,6 @@ def explore_rhyme_structure_of_han_dynasty_poems():
                 lc_late_han = schuessler.get_late_han(last_char)
                 print(s + '(' + lc_late_han + ')。')
 
-
-    if 0:
-        for k in lu1983_dict:
-            #print(k + ': ')# + lu1983_dict[k])
-            lu_poem.set_data_with_line_from_file(k, lu1983_dict[k])
-            uniqid2poem_dict[k] = ''
-            uniqid2poem_dict[k] = deepcopy(lu_poem)
-        for k in uniqid2poem_dict:
-            print('-'*50)
-            poem = uniqid2poem_dict[k].get_poem_content_as_str()
-
-            #uniqid2poem_dict[k].print_poem_content()
-
 # purpose:
 #   Determine the basic line length
 def characterize_stanza_structure(stanza, is_verbose=False):
@@ -1720,24 +1704,6 @@ def characterize_stanza_structure(stanza, is_verbose=False):
     if is_verbose:
         print('\tMost common length = ' + str(most_common_len))
     return most_common_len
-
-def grab_last_character_in_line(line):
-    funct_name = 'grab_last_character_in_line()'
-    # take into account 虛字 like 之、兮、乎, etc
-    if not line.strip():
-        return ''
-    if '守善不報，' in line:
-        x = 1
-    exception_chars = ['之', '兮', '乎', '也', '矣', '焉']
-    char_pos = len(line)-1
-    last_char = line[len(line)-1]
-    if last_char == '）':
-        last_char = line[len(line) - 2]
-        char_pos -= 1
-    elif last_char in exception_chars:
-        last_char = line[len(line) - 2]
-        char_pos -= 1
-    return last_char, char_pos
 
 def get_kmss2015_rhyme_words_naively(inscription, unique_id, ignore_unpunctuated=True):
     funct_name = 'get_rhyme_words_naively()'
@@ -1791,12 +1757,10 @@ def get_rhyme_words_naively(stanza, line_length, unique_id, rw_type='Lu1983'):
             if not line_inc % 2:
                 #print('line_inc=' + str(line_inc))
                 line_id = unique_id + '.' + str(line_inc)
-                #if len(line) < line_length:
-                #    continue
-                #zi = line[line_length-1]
                 if '兮' == line[len(line)-1]: # remove '兮' if it appears as last character in line
                     line = line[0:len(line)-1]
                 zi = line[len(line) - 1]
+                zi_pos = len(line) - 1
                 if zi == '□' or zi == '…' or zi == '・':
                     continue
                 if zi not in rw2line_dict:
@@ -1805,13 +1769,108 @@ def get_rhyme_words_naively(stanza, line_length, unique_id, rw_type='Lu1983'):
     return rw2line_dict
         # grab_last_character_in_line
 
+def get_rhyme_words_naively2(stanza, line_length, unique_id, rw_type='Lu1983'):
+    funct_name = 'get_rhyme_words_naively2()'
+    retval = []
+    if rw_type == 'Lu1983':
+        if '。' not in stanza:
+            print(funct_name + ' poem not punctuated with 「。」')
+            print('stanza=' + stanza)
+            return retval
+        #len2num_occ_dict = {}
+        stanza = stanza.split('。')
+        line_inc = 0
+        rw2line_dict = {}
+        rw_list = []
+        for line in stanza:
+            if not line.strip():
+                continue
+            line_inc += 1
+            line_id = unique_id + '.' + str(line_inc)
+            # if line_inc is a multiple of 2
+            if not line_inc % 2:
+                #print('line_inc=' + str(line_inc))
+
+                if '兮' == line[len(line)-1]: # remove '兮' if it appears as last character in line
+                    line = line[0:len(line)-1]
+                zi = line[len(line) - 1]
+                zi_pos = len(line) - 1
+                if zi == '□' or zi == '…' or zi == '・':
+                    rw_list.append(('', -1, line, line_id))
+                    continue
+                #if zi not in rw2line_dict:
+                #    rw2line_dict[zi] = []
+                #rw2line_dict[zi].append((line,line_id))
+                rw_list.append((zi, zi_pos, line, line_id))
+            else:
+                rw_list.append(('',-1, line, line_id))
+    return rw_list #rw2line_dict
+
+
+#def if_special_punctuation(stanza_str):
+#    retval = False
+#    if '，' in stanza_str and '。' in stanza_str:
+#        retval = True
+#    return retval
+
+def get_rhyme_words_from_stanza(stanza_str, stanza_id, data_type, every_line_rhymes=False):
+    funct_name = 'get_rhyme_words_from_stanza()'
+    rw_list = []
+    #exception_chars = ['之', '兮', '乎', '也', '矣']
+    if not stanza_str.strip():
+        return rw_list
+    # There is some weirdness with mirror punctuation for a minority of mirrors.
+    # These need to be handled differently
+    if data_type == 'mirrors' and if_special_mirror_punctuation(stanza_str):
+        return get_rhyme_words_for_kmss2015_mirror_inscription(stanza_id, stanza_str)
+    stanza = stanza_str.split('。')
+    line_inc = 0
+    modulo = 2
+    if every_line_rhymes:
+        modulo = 1
+    for line in stanza:
+        if not line.strip():
+            continue
+        line_inc += 1
+        line_id = stanza_id + '.' + str(line_inc)
+        # if this is a rhyming line...
+        if not line_inc % modulo:
+            #if '兮' == line[len(line) - 1]:  # remove '兮' if it appears as last character in line
+            #    line = line[0:len(line) - 1]
+            zi = line[len(line) - 1] # get the rhyming word
+
+            #if any()
+            zi_pos = len(line) - 1 # get the rhyming word's position
+            if zi == '々':  # get the character preceding 々
+                zi = line[len(line) - 2]
+                zi_pos -= 1
+            #if zi == '}' or zi == '{': # these are used in the data for character formulas
+            #    x = 1 # 𧣈
+            if zi == '□' or zi == '…' or zi == '・' or zi == '}' or zi == '{':
+                rw_list.append(('', -1, line, line_id))
+                continue
+            if any(exception_char in zi for exception_char in exception_chars):
+                zi = line[len(line) - 2]
+                zi_pos -= 1
+            if zi == '》':
+                zi = line[len(line) - 3]
+                zi_pos -= 1
+
+            rw_list.append((zi, zi_pos, line, line_id))
+        else:
+            rw_list.append(('', -1, line, line_id))
+    return rw_list  # rw2line_dict
+
+
+#
+# NOTE: This was the code used for the Vienna conference 2022 April
 def naively_annotate_han_dynasty_poems():
     funct_name = 'naively_annotate_han_dynasty_poems()'
     readin_lu_1983_data()
     LU_poem = lu1983_poem()
     LU_poem.set_data_labels(lu1983_labels)
     uniqid2poem_dict = {}
-    rhyme_net = rnetwork()
+    rhyme_net = rnetwork('rhyme_net')
     testing_code = False
     test_set = []
     s2rhyme_list = {}
@@ -1983,75 +2042,483 @@ def naively_annotate_han_dynasty_poems():
             print('\t' + ''.join(cluster2zi_dict[cluster_id]))
         #return graph
 
+def message2user(msg, is_verbose=False):
+    if is_verbose:
+        print(msg)
+
 def test_multi_dataset_processor():
     funct_name = 'test_multi_dataset_processor()'
     is_verbose = True
-    processor = multi_dataset_processor(is_verbose)
-    processor.process_mao_2008_stelae_data()
-    processor.naively_add_lu1983_to_network()
-    processor.naively_add_kyomeishusei2015_han_mirror_data()
+    print_debug_msgs = True
+    message2user('Starting multi_dataset_processor()...', is_verbose)
+    processor = multi_dataset_processor(is_verbose)#, delete_old_data)
+    filename_storage = filename_depot()
+    #processor.test_readin_network_data()
+    #return
+    message2user('Done.', is_verbose)
+    run_lu1983_data = True
+    run_mirror_data = True
+    run_stelae_data = True
+    run_combined_data = True
 
-    #processor.print_all_nodes_n_edges()
-    processor.print_nodes_n_edges2file('all', 'naively')
+    is_verbose = False
+    run_test = False
+
+    pre_com_det_processing = False # False: post com det processing
+
+    if run_lu1983_data:
+        message2user('Running Received Shi Data...', is_verbose)
+        if pre_com_det_processing:
+            processor.overwrite_old_data()
+            message2user('\tProcessing Received Shi Data', is_verbose)
+            processor.pre_com_det_processing('received_shi', is_verbose, print_debug_msgs)
+            #processor.process_lu1983_data(is_verbose, run_test, print_debug_msgs)
+            message2user('\tDone.', is_verbose)
+            message2user('\tOutputting data to file...', is_verbose)
+            processor.output_received_shi_network_to_file()
+            rnet_filename = filename_storage.get_filename_for_annotated_network_data('network', 'naive', 'received_shi')
+            #rnet_filename = os.path.join(get_hanproj_dir(), 'received-shi', 'received_shi_pre_com_det_rnetwork.txt')
+            received_net = processor.get_network_object('network', 'naive', 'received_shi')
+            received_net.output_rnetwork_to_file(rnet_filename)
+            message2user('\tDone.', is_verbose)
+            message2user('\tRunning Community Detection...', is_verbose)
+            processor.run_community_detection_for_lu1983()
+            message2user('\tDone.', is_verbose)
+            message2user('\tCreating pyvis network graph...', is_verbose)
+            processor.create_pyvis_network_graph_for_received_shi_com_detected_data()
+            message2user('\tDone.', is_verbose)
+            processor.create_pyvis_network_graph_for_pre_com_det_received_shi()
+        else: # run com det processing
+            processor.do_not_reprocess_old_data()
+            message2user('\tCreating network with detected communities for received shi (from previous run)...',
+                         is_verbose)
+            processor.create_network_for_received_shi_with_com_det_annotator()
+            message2user('\tDone.', is_verbose)
+        message2user('Done.', is_verbose)
+
+    if run_mirror_data:
+        message2user('Running Mirror data...', is_verbose)
+        if pre_com_det_processing:
+            processor.overwrite_old_data()
+            message2user('\tProcessing Mirror data...', is_verbose)
+            processor.pre_com_det_processing('mirrors', is_verbose, print_debug_msgs)
+            #processor.process_kyomeishusei2015_han_mirror_data()
+            message2user('\tDone.', is_verbose)
+            message2user('\tOutputting data to file...', is_verbose)
+            processor.output_mirror_network_to_file()
+            message2user('\tDone.', is_verbose)
+            message2user('\tRunning Community Detection...', is_verbose)
+            processor.run_community_detection_for_mirrors()
+            message2user('\tDone.', is_verbose)
+            message2user('\tCreating pyvis network graph...', is_verbose)
+            processor.create_pyvis_network_graph_for_mirrors_com_detected_data()
+            message2user('\tDone.', is_verbose)
+        else: # run com det processing
+            processor.do_not_reprocess_old_data()
+            message2user('\tCreating network with detected communities for mirrors (from previous run)...',
+                         is_verbose)
+            processor.create_network_for_mirrors_with_com_det_annotator()
+            message2user('\tDone.', is_verbose)
+        message2user('Done.', is_verbose)
+    if run_stelae_data:
+        message2user('Running Stelae data...', is_verbose)
+        if pre_com_det_processing:
+            processor.overwrite_old_data()
+            message2user('\tProcessing Stelae data...', is_verbose)
+            processor.pre_com_det_processing('stelae', is_verbose, print_debug_msgs)
+            message2user('\tDone.', is_verbose)
+            message2user('\tOutputting data to file...', is_verbose)
+            processor.output_stelae_network_to_file()
+            message2user('\tDone.', is_verbose)
+            message2user('\tRunning Community Detection...', is_verbose)
+            processor.run_community_detection_for_stelae()
+            message2user('\tDone.', is_verbose)
+            message2user('\tCreating pyvis network graph...', is_verbose)
+            processor.create_pyvis_network_graph_for_stelae_com_detected_data()
+            message2user('\tDone.', is_verbose)
+        else:# run com det processing
+            processor.do_not_reprocess_old_data()
+            message2user('\tCreating network with detected communities for stelae (from previous run)...',
+                         is_verbose)
+            processor.create_network_for_stelae_with_com_det_annotator()
+            message2user('\tDone.', is_verbose)
+        message2user('Done.', is_verbose)
+    if run_combined_data:
+        message2user('Running combined data...', is_verbose)
+        if pre_com_det_processing:
+            processor.do_not_reprocess_old_data()
+            message2user('\tOutputting data to file...', is_verbose)
+            processor.output_combined_data_network_to_file()
+            message2user('\tDone.', is_verbose)
+            message2user('\tRunning Community Detection...', is_verbose)
+            processor.run_community_detection_for_combined_data()
+            message2user('\tDone.', is_verbose)
+            message2user('\tCreating pyvis network graph...', is_verbose)
+            processor.create_pyvis_network_graph_for_combined_com_detected_data()
+            message2user('\tDone.', is_verbose)
+            message2user('\tCreating pyvis network graph for combined Schuessler...', is_verbose)
+            processor.create_pyvis_network_graph_for_schuessler_combo_data()
+            message2user('\tCreating pyvis network graph for pre-com det combined data...', is_verbose)
+            processor.create_pyvis_network_graph_for_pre_com_det_combined_data()
+            message2user('\tDone.', is_verbose)
+            add_com_det = False
+        else:# run com det processing
+            processor.do_not_reprocess_old_data()
+            add_com_det = True
+            filename = processor.get_filename_for_annotated_network_data('network', 'naive', 'received_shi')
+            processor.readin_rnetwork_data_from_file(filename, 'rhyme_net')
+            filename = processor.get_filename_for_annotated_network_data('network', 'naive', 'mirrors')
+            processor.readin_rnetwork_data_from_file(filename, 'rhyme_net')
+            filename = processor.get_filename_for_annotated_network_data('network', 'naive', 'stelae')
+            processor.readin_rnetwork_data_from_file(filename, 'rhyme_net')
+        message2user('Done.', is_verbose)
     #node_list = processor.get_overall_node_list()
-
-    #processor.plot_results()
-
-rw_list = ['a', 'b', 'c', 'd', 'e', 'f', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v',
-           'w', 'x', 'y', 'z']
-class rhyme_marker:
-    def __init__(self):
-        self.rw_list = rw_list[:]
-        self.rhyme2marker_dict = {}
-        self.cnt = -1
-    def get_marker(self, rhyme):
-        retval = ''
-        if rhyme in self.rhyme2marker_dict:
-            retval = self.rhyme2marker_dict[rhyme]
-        else:
-            self.cnt += 1
-            retval = self.rw_list[self.cnt]
-            self.rhyme2marker_dict[rhyme] = retval
-        return retval
-    def reset_memory(self):
-        self.rhyme2marker_dict = {}
-        self.cnt = -1
-
+    if pre_com_det_processing:
+        processor.get_list_of_nodes_missing_schuessler_data()
 
 class multi_dataset_processor:
     def __init__(self, is_verbose=False):
+        self.class_name = 'multi_dataset_processor'
+        self.filename_storage = filename_depot()
+        self.reprocess_old_data = False
         self.is_verbose = is_verbose
-        self.print('Creating multi_dataset_processor...')
-        self.rhyme_net = rnetwork()
-        self.graph = nx.Graph()
-        self.received_net = rnetwork()
-        self.received_graph = nx.Graph()
-        self.stelae_rnet = rnetwork()
-        self.stelae_graph = nx.Graph()
-        self.mirror_rnet = rnetwork()
-        self.mirror_graph = nx.Graph()
+        self.networks = {}
+        self.initialize_network_array()
+        self.print('Creating ' + self.class_name + '...')
+        self.unwanted = ['〗', '）', '}', '：', '々']
         self.run_naive_annotator = True
         self.run_schuessler_annotator = True
         self.print('\tDone.')
 
+    def initialize_network_array(self):
+        if self.networks:
+            return
+        network_types = ['network', 'graph', 'pyvis']
+        annotator_types = ['naive', 'schuessler', 'com_det']
+        data_types = ['received_shi', 'stelae', 'mirrors', 'combo']
+        for nt in network_types:
+            self.networks[nt] = {}
+            for at in annotator_types:
+                self.networks[nt][at] = {}
+                for dt in data_types:
+                    self.networks[nt][at][dt] = None
+
+    def get_network_object(self, network_type, annotator_type, data_type):
+        funct_name = 'get_network_object()'
+        retval = None
+        net_obj_name = network_type + '_' + annotator_type + '_' + data_type
+        if self.networks[network_type][annotator_type][data_type] == None:
+            if network_type == 'network':
+                self.networks[network_type][annotator_type][data_type] = rnetwork(self.class_name + '::' + net_obj_name)
+            elif network_type == 'graph':
+                self.networks[network_type][annotator_type][data_type] = nx.Graph()
+            elif network_type == 'pyvis':
+                self.networks[network_type][annotator_type][data_type] = Network('1000px', '1000px',
+                                                                                 heading=net_obj_name, font_color="white")
+                options = 'var options = {  "edges": {    "color": {      "inherit": "to"    },    "smooth": false  },  "physics": {    "minVelocity": 0.75  }}'
+                self.networks[network_type][annotator_type][data_type].set_options(options)
+            else:
+                msg = funct_name + 'ERROR: Requested network object type: \'' + network_type + '\' + \''
+                msg += annotator_type + '\' + \'' + data_type + '\' NOT supported!'
+                print(msg)
+                return None
+        return self.networks[network_type][annotator_type][data_type]
+
+    def fill_rhyme_net_with_preprocessed_data(self):
+        funct_name = 'fill_rhyme_net_with_preprocessed_data()'
+        #naive_annotated_received_shi_network_data.txt
+        received_shi_file = self.get_filename_for_annotated_network_data('network', 'naive', 'received_shi')
+        mirrors_file = self.get_filename_for_annotated_network_data('network', 'naive', 'mirrors')
+        stelae_file = self.get_filename_for_annotated_network_data('network', 'naive', 'stelae')
+        self.readin_graph_data_from_file()
+
+    def test_readin_graph_data(self):
+        funct_name = 'test_readin_graph_data()'
+        filename = self.get_filename_for_annotated_network_data('graph', 'naive', 'received_shi')
+        self.readin_graph_data_from_file(filename)
+#def
+    def readin_graph_data_from_file(self, filename):
+        funct_name = 'readin_graph_data_from_file()'
+        if not if_file_exists(filename, funct_name):
+            return
+        file_lines = readlines_of_utf8_file(filename)
+        for fl in file_lines:
+            print(fl)
+
+    def test_readin_network_data(self):
+        funct_name = 'test_readin_network_data()'
+        filename = self.get_filename_for_annotated_network_data('network', 'naive', 'received_shi')
+        self.readin_rnetwork_data_from_file(filename, 'rhyme_net')
+
+    #
+    # reads in network data (which was written out by an instantiation of this class)
+    #   and writes the data into the specified network
+    def readin_rnetwork_data_from_file(self, filename, network_name, is_verbose=False):
+        funct_name = 'readin_rnetwork_data_from_file()'
+        if not if_file_exists(filename, funct_name):
+            return
+        #self.class_name
+        #self.class_name = 'multi_dataset_processor'
+        rhyme_net = self.get_network_object('network', 'naive', 'combo')
+        s_rhyme_net = self.get_network_object('network', 'schuessler', 'combo')
+        my_networks = {
+            'rhyme_net' : rhyme_net,
+            's_rhyme_net' : s_rhyme_net
+        }
+        net = my_networks[network_name]
+        #rhyme_net
+        delim = '\t'
+        file_lines = readlines_of_utf8_file(filename)
+        num_nodes = 0
+        num_edges = 0
+        nodes = []
+        for fl in file_lines:
+            print(fl)
+            fl = fl.split(delim)
+            if len(fl) > 1:
+                if is_hanzi(fl[1]): # Edge
+                    left_char = fl[0]
+                    right_char = fl[1]
+                    try:
+                        num_rhymes = fl[2]
+                    except:
+                        num_rhymes = -1
+                    try:
+                        rhyme_id = fl[3]
+                    except:
+                        rhyme_id = ''
+                    if is_verbose:
+                        print('EDGE: ' + left_char + delim + right_char + delim + str(num_rhymes) + delim + rhyme_id)
+                    net.add_edge(left_char, right_char, num_rhymes, rhyme_id)
+                    num_edges += 1
+                else: # Node
+                    node = fl[0]
+                    try:
+                        stanza_inc = fl[1]
+                    except:
+                        stanza_inc = -1
+                    try:
+                        orig_line = fl[2]
+                    except:
+                        orig_line = ''
+                    if is_verbose:
+                        print('NODE: ' + node + delim + str(stanza_inc) + delim + orig_line)
+                    net.add_node(node, stanza_inc, orig_line)
+                    if node not in nodes:
+                        nodes.append(node)
+                        num_nodes += 1
+        print(str(len(file_lines)) + ' lines in the file. ' + str(num_nodes) + ' nodes and ' + str(num_edges) + ' edges.')
+        x = 1
+
+    def do_not_reprocess_old_data(self):
+        self.reprocess_old_data = False
+
+    def overwrite_old_data(self):
+        self.reprocess_old_data = True
+
+    def if_reprocess_old_data(self):
+        return self.reprocess_old_data
+
+    def delete_processed_annotated_network_data_files(self):
+        funct_name = 'delete_processed_annotated_network_data_files()'
+        delete_file_if_it_exists(self.get_filename_for_annotated_network_data('graph', 'schuessler', 'combo'))
+        delete_file_if_it_exists(self.get_filename_for_annotated_network_data('network', 'schuessler', 'combo'))
+        delete_file_if_it_exists(self.get_filename_for_annotated_network_data('graph', 'naive', 'combo'))
+        delete_file_if_it_exists(self.get_filename_for_annotated_network_data('network', 'naive', 'combo'))
+        delete_file_if_it_exists(self.get_filename_for_annotated_network_data('network', 'naive', 'received_shi'))
+        delete_file_if_it_exists(self.get_filename_for_annotated_network_data('graph', 'naive', 'received_shi'))
+        delete_file_if_it_exists(self.get_filename_for_annotated_network_data('network', 'schuessler', 'received_shi'))
+        delete_file_if_it_exists(self.get_filename_for_annotated_network_data('graph', 'schuessler', 'received_shi'))
+        delete_file_if_it_exists(self.get_filename_for_annotated_network_data('network', 'naive', 'stelae'))
+        delete_file_if_it_exists(self.get_filename_for_annotated_network_data('graph', 'naive', 'stelae'))
+        delete_file_if_it_exists(self.get_filename_for_annotated_network_data('network', 'schuessler', 'stelae'))
+        delete_file_if_it_exists(self.get_filename_for_annotated_network_data('graph', 'schuessler', 'stelae'))
+        delete_file_if_it_exists(self.get_filename_for_annotated_network_data('network', 'schuessler', 'mirrors'))
+        delete_file_if_it_exists(self.get_filename_for_annotated_network_data('graph', 'naive', 'mirrors'))
+        delete_file_if_it_exists(self.get_filename_for_annotated_network_data('network', 'naive', 'mirrors'))
+        delete_file_if_it_exists(self.get_filename_for_annotated_network_data('graph', 'schuessler', 'mirrors'))
+
+    def get_filename_for_annotated_network_data(self, network_type, annotator_type, data_type):
+        funct_name = 'get_filename_for_annotated_network_data()'
+        return self.filename_storage.get_filename_for_annotated_network_data(network_type, annotator_type, data_type)
+
+    def parse_filename_for_annotated_network_data(self, filename):
+        funct_name = 'parse_filename_for_annotated_network_data()'
+        # Ex. naive_annotated_received_shi_network_data.txt
+        annotator_type = 'naive'
+        if 'com_det' in filename:
+            annotator_type = 'com_det'
+        elif 'schuessler' in filename:
+            annotator_type = 'schuessler'
+        data_type = 'received_shi'
+        if 'stelae' in filename:
+            data_type = 'stelae'
+        elif 'mirrors' in filename:
+            data_type = 'mirrors'
+        if 'network' in filename:
+            network_type = 'network'
+        elif 'graph' in filename:
+            network_type = 'graph'
+        return annotator_type, data_type, network_type
+
+    def create_pyvis_network_graph_for_pre_com_det_combined_data(self):
+        rhyme_net = self.get_network_object('network', 'naive', 'combo')
+        rhyme_net.create_pyvis_network_graph('Combined Data Pre-Com Det')
+
+    def create_pyvis_network_graph_for_pre_com_det_received_shi(self):
+        received_net = self.get_network_object('network', 'naive', 'received_shi')
+        received_net.create_pyvis_network_graph('Received Shi Pre-Com Det')
+
+    def output_received_shi_network_to_file(self):
+        funct_name = 'output_network_to_file()'
+        filename_base = 'annotated_received_shi_pre_com_det'
+        print2file = True
+        received_net = self.get_network_object('network', 'naive', 'received_shi')
+        received_net.get_infomap_linked_list_of_rhyme_network(filename_base, print2file)
+
+    def output_combined_data_network_to_file(self):
+        funct_name = 'output_combined_data_network_to_file()'
+        filename_base = 'annotated_combined_data_pre_com_det'
+        print2file = True
+        rhyme_net = self.get_network_object('network', 'naive', 'combo')
+        rhyme_net.get_infomap_linked_list_of_rhyme_network(filename_base, print2file)
+
+    def output_mirror_network_to_file(self):
+        funct_name = 'output_mirror_network_to_file()'
+        filename_base = 'annotated_mirrors_pre_com_det'
+        print2file = True
+        mirror_rnet = self.get_network_object('network', 'naive', 'mirrors')
+        mirror_rnet.get_infomap_linked_list_of_rhyme_network(filename_base, print2file)
+
+    def output_stelae_network_to_file(self):
+        funct_name = 'output_stelae_network_to_file()'
+        filename_base = 'annotated_stelae_pre_com_det'
+        print2file = True
+        stelae_rnet = self.get_network_object('network', 'naive', 'stelae')
+        stelae_rnet.get_infomap_linked_list_of_rhyme_network(filename_base, print2file)
+
+    def create_pyvis_network_graph_for_mirrors_com_detected_data(self):
+        funct_name = 'create_pyvis_network_graph_for_mirrors_com_detected_data()'
+        print('Begin ' + funct_name)
+        com_det_file = os.path.join(get_hanproj_dir(), 'hanproject', 'com_detection_kyomeishusei2015_mirror_data_output.txt')
+        desired_groups = []
+        mirror_rnet = self.get_network_object('network', 'naive', 'mirrors')
+        mirror_rnet.create_pyvis_network_graph_for_community_detected_data('Post-Com Det for Mirror Data', com_det_file, desired_groups)
+        print('\tDone.')
+
+    def create_pyvis_network_graph_for_schuessler_combo_data(self, add_weight=True):
+        pyvis_schuessler_combo = self.get_network_object('pyvis', 'schuessler', 'combo')
+        nlist = pyvis_schuessler_combo.get_nodes()
+        elist = pyvis_schuessler_combo.get_edges()
+
+        r2c = rhyme2color()
+        pyvis_sch_net = Network('1000px', '1000px', heading='Schuessler for Combo Data', font_color="white")
+        options = 'var options = {  "edges": {    "color": {      "inherit": "to"    },    "smooth": false  },  "physics": {    "minVelocity": 0.75  }}'
+        pyvis_sch_net.set_options(options)
+        #pyvis_s_net.show('Schuessler_test.html')
+        s_rhyme_net = self.get_network_object('network', 'schuessler', 'combo')
+        for n in nlist:
+            # grab rhyme
+            try:
+                rhyme = n.split('(')[1]
+            except IndexError as ie:
+                x = 1
+            rhyme = rhyme.replace(')','')
+            rw = n.split(' (')[0]
+            r2c.add_rhyme(rhyme)
+            color = r2c.given_rhyme_get_color(rhyme)
+            if add_weight:
+                node_weight = s_rhyme_net.get_node_weight(n)
+                pyvis_sch_net.add_node(n, label=n, title=rhyme, color=color, shape='circle',
+                                      value=node_weight)  # title = popup
+            else:
+                pyvis_sch_net.add_node(n, label=n, title=rhyme, color=color, shape='circle')
+        for e in elist:
+            if add_weight:
+                edge_weight = s_rhyme_net.get_edge_weight(e['from'], e['to'])
+                pyvis_sch_net.add_edge(e['from'], e['to'], value=edge_weight)
+            else:
+                pyvis_sch_net.add_edge(e['from'], e['to'])
+        pyvis_sch_net.show('Schuessler_combo_data.html')
+
+    def create_pyvis_network_graph_for_received_shi_com_detected_data(self):
+        funct_name = 'create_pyvis_network_graph_for_received_shi_com_detected_data()'
+        com_det_file = os.path.join(get_hanproj_dir(), 'hanproject', 'com_detection_lu1983_received_shi_data_output.txt')
+        desired_groups = []
+        received_net = self.get_network_object('network', 'naive', 'received_shi')
+        received_net.create_pyvis_network_graph_for_community_detected_data('Post-Com Det for Received Shi Data', com_det_file, desired_groups)
+
+    def create_pyvis_network_graph_for_stelae_com_detected_data(self):
+        funct_name = 'create_pyvis_network_graph_for_stelae_com_detected_data()'
+        com_det_file = os.path.join(get_hanproj_dir(), 'hanproject',
+                                    'com_detection_mao_2008_stelae_data_output.txt')
+        desired_groups = []
+        stelae_rnet = self.get_network_object('network', 'naive', 'stelae')
+        stelae_rnet.create_pyvis_network_graph_for_community_detected_data('Post-Com Det for Stelae Data',
+                                                                           com_det_file, desired_groups)
+
+    def create_pyvis_network_graph_for_combined_com_detected_data(self):
+        funct_name = 'create_pyvis_network_graph_for_combined_com_detected_data()'
+        filename_storage = filename_depot()
+        com_det_file = filename_storage.get_filename_for_combined_data_community_detection()
+        #com_det_file = os.path.join(get_hanproj_dir(), 'hanproject',
+        #                            'com_detection_combined_data_output.txt')
+        desired_groups = []
+        rhyme_net = rhyme_net = self.get_network_object('network', 'naive', 'combo')
+        rhyme_net.create_pyvis_network_graph_for_community_detected_data('Post-Com Det for Combined Data',
+                                                                                com_det_file, desired_groups)
+
+
+
+            #create_pyvis_network_graph_for_community_detected_data
         #NOTE:
         # this function just prints out the data in its current state
         # -> this state may change at different levels of processing
         # RECOMMENDED: have the state name in 'filename_base' (like: naive, schuessler, etc.)
+
     def print_nodes_n_edges2file(self, network_type, filename_base):
         if network_type == 'combined':
-            self.rhyme_net.get_infomap_linked_list_of_rhyme_network('combined_' + filename_base)
+            rhyme_net = self.get_network_object('network', 'naive', 'combo')
+            rhyme_net.get_infomap_linked_list_of_rhyme_network('combined_' + filename_base)
+            if self.is_schuessler_annotator_on():
+                s_rhyme_net = self.get_network_object('network', 'schuessler', 'combo')
+                s_rhyme_net.get_infomap_linked_list_of_rhyme_network('schuessler_combined_' + filename_base)
         elif network_type == 'stelae':
-            self.stelae_rnet.get_infomap_linked_list_of_rhyme_network('stelae_' + filename_base)
+            stelae_rnet = self.get_network_object('network', 'naive', 'stelae')
+            stelae_rnet.get_infomap_linked_list_of_rhyme_network('stelae_' + filename_base)
+            if self.is_schuessler_annotator_on():
+                s_stelae_rnet = self.get_network_object('network', 'schuessler', 'stelae')
+                s_stelae_rnet.get_infomap_linked_list_of_rhyme_network('schuessler_stelae_' + filename_base)
         elif network_type == 'mirrors':
-            self.mirror_rnet.get_infomap_linked_list_of_rhyme_network('mirrors_' + filename_base)
+            mirror_rnet = self.get_network_object('network', 'naive', 'mirrors')
+            mirror_rnet.get_infomap_linked_list_of_rhyme_network('mirrors_' + filename_base)
+            if self.is_schuessler_annotator_on():
+                s_mirror_rnet = self.get_network_object('network', 'schuessler', 'mirrors')
+                s_mirror_rnet.get_infomap_linked_list_of_rhyme_network('schuessler_mirrors_' + filename_base)
         elif network_type == 'received_shi':
-            self.received_net.get_infomap_linked_list_of_rhyme_network('received_shi_' + filename_base)
+            received_net = self.get_network_object('network', 'naive', 'received_shi')
+            received_net.get_infomap_linked_list_of_rhyme_network('received_shi_' + filename_base)
+            if self.is_schuessler_annotator_on():
+                s_received_net = self.get_network_object('network', 'schuessler', 'received_shi')
+                s_received_net.get_infomap_linked_list_of_rhyme_network('schuessler_received_shi_' + filename_base)
         elif network_type == 'all':
-            self.rhyme_net.get_infomap_linked_list_of_rhyme_network('combined_' + filename_base)
-            self.stelae_rnet.get_infomap_linked_list_of_rhyme_network('stelae_' + filename_base)
-            self.mirror_rnet.get_infomap_linked_list_of_rhyme_network('mirrors_' + filename_base)
-            self.received_net.get_infomap_linked_list_of_rhyme_network('received_shi_' + filename_base)
+            rhyme_net = self.get_network_object('network', 'naive', 'combo')
+            rhyme_net.get_infomap_linked_list_of_rhyme_network('combined_' + filename_base)
+            stelae_rnet = self.get_network_object('network', 'naive', 'stelae')
+            stelae_rnet.get_infomap_linked_list_of_rhyme_network('stelae_' + filename_base)
+            mirror_rnet = self.get_network_object('network', 'naive', 'mirrors')
+            mirror_rnet.get_infomap_linked_list_of_rhyme_network('mirrors_' + filename_base)
+            received_net = self.get_network_object('network', 'naive', 'received_shi')
+            received_net.get_infomap_linked_list_of_rhyme_network('received_shi_' + filename_base)
+            if self.is_schuessler_annotator_on():
+                s_rhyme_net = self.get_network_object('network', 'schuessler', 'combo')
+                s_rhyme_net.get_infomap_linked_list_of_rhyme_network('schuessler_combined_' + filename_base)
+                s_stelae_rnet = self.get_network_object('network', 'schuessler', 'stelae')
+                s_stelae_rnet.get_infomap_linked_list_of_vierhyme_network('schuessler_stelae_' + filename_base)
+                s_mirror_rnet = self.get_network_object('network', 'schuessler', 'mirrors')
+                s_mirror_rnet.get_infomap_linked_list_of_rhyme_network('schuessler_mirrors_' + filename_base)
+                s_received_net = self.get_network_object('network', 'schuessler', 'received_shi')
+                s_received_net.get_infomap_linked_list_of_rhyme_network('schuessler_received_shi_' + filename_base)
 
     def is_schuessler_annotator_on(self):
         return self.run_schuessler_annotator
@@ -2069,149 +2536,55 @@ class multi_dataset_processor:
         if self.is_verbose:
             print(msg)
 
+    #def output_nx_graph_data_to_file(self, graph, output_file):
+    #    delete_file_if_it_exists(output_file)
+
     def get_overall_node_list(self):
-        return self.rhyme_net.get_node_list()
+        rhyme_net = self.get_network_object('network', 'naive', 'combo')
+        return rhyme_net.get_node_list()
+
+    def get_list_of_nodes_missing_schuessler_data(self):
+        node_list = self.get_overall_node_list()
+        schuessler = schuessler_n_bentley()
+        without_list = []
+        for nl in node_list:
+            late_han = schuessler.get_late_han(nl)
+            if not late_han:
+                without_list.append(nl)
+        print('Nodes missing Schuessler Late Han data (' + str(len(without_list)) + '):')
+        print('\t' + ''.join(without_list))
 
     def print_all_nodes_n_edges(self):
-        self.rhyme_net.print_all_nodes_n_edges(True)
+        rhyme_net = self.get_network_object('network', 'naive', 'combo')
+        rhyme_net.print_all_nodes_n_edges(True)
 
     def plot_results(self):
         self.print('Plotting results...')
-
-        nx.draw(self.graph, with_labels=True,
+        graph = self.get_network_object('graph', 'naive', 'combo')
+        nx.draw(graph, with_labels=True,
                 bbox=dict(facecolor="skyblue", edgecolor='black', boxstyle='round,pad=0.2'),
                 font_family='HanaMinA')
         plt.show()#bbox=dict(facecolor="skyblue", edgecolor='black', boxstyle='round,pad=0.2')
         self.print('\tDone.')
 
-    def process_mao_2008_stelae_data(self):
-        funct_name = 'process_mao_2008_stelae_data()'
+    def test_mao_2008_stelae_code(self):
+        funct_name = 'test_mao_2008_stelae_code(self)):'
         self.print('Naively adding Mao 2008 data...')
-        s_data = readin_mao_2008_stelae_data(is_verbose=True)
+        print('Parsing Mao 2008 stelase data...')
+        s_data = parse_mao_2008_stelae_data(is_verbose=True)
+        print('\tDone.')
         uniq2data_dict = s_data.get_uniq2data_dict()
-        naive_output = ''
-        schuessler_output = ''
-        if self.is_schuessler_annotator_on():
-            schuessler_output = os.path.join(get_stelae_dir(), 'schuessler_annotated_毛遠明 《漢魏六朝碑刻校注》.txt')
-            delete_file_if_it_exists(schuessler_output)
-            schuessler = schuessler_n_bentley()
-        if self.is_naive_annotator_on():
-            naive_output = os.path.join(get_stelae_dir(), 'naively_annotated_毛遠明 《漢魏六朝碑刻校注》.txt')
-            delete_file_if_it_exists(naive_output)
         msg_out = ''
         rmarker = rhyme_marker()
         for s_id in uniq2data_dict:
-#            if '.080' in s_id:
-#                x = 1
+            msg_out += s_id + ': '
             poem = uniq2data_dict[s_id].get_poem_content()
             rw_words = get_numbered_rhyme_words_from_stele_inscription(s_id, poem)
-            if not rw_words:
-                if self.is_naive_annotator_on():
-                    for p in poem:
-                        append_line_to_utf8_file(naive_output, s_id + ': ' + p)
-                if self.is_schuessler_annotator_on():
-                    for p in poem:
-                        append_line_to_utf8_file(schuessler_output, s_id + ': ' + p)
-            #if rw_words: # if there are any rhyme words...
-            if rw_words:
-                x = 1
-            rmarker.reset_memory() # TO DO: think more about where this might be needed: blank lines in between stanza
-
-            for line_k in rw_words:
-                smsg_out = s_id + ': '
-                erw_words = []
-                if len(rw_words[line_k]) == 1 or len(rw_words[line_k]) == 0:
-                    y = rw_words[line_k]
-                    x = 1
-
-                if self.is_schuessler_annotator_on():
-                    for rw_inc in rw_words[line_k]:
-                        tup_list = rw_words[line_k][rw_inc]
-                        for tp in tup_list:
-                            rword = tp[0]
-                            rpos = tp[1]
-                            oline = tp[2]
-                            rhyme = ''
-
-                            lhan = schuessler.get_late_han(rword)  # e = hanzi
-                            #
-                            # TO DO: fix this problem
-                            # what to do with multiple readings?
-                            # For now, we're just going to randomly choose pronunciation #1
-                            # Later, need to have chosen pronunciations optimize rhyming
-                            if lhan:
-                                initial, medial, rhyme, pcoda = parse_schuessler_lhan_syllable(lhan[0])
-                                marker = rmarker.get_marker(rhyme)
-                                new_line = insert_rhyme_marker_at_pos(oline, rpos, marker + '(' + rhyme + ')')
-                                smsg_out += new_line + '。'
-                                print('[' + str(rw_inc) + '] ' + rword + ':' + new_line)
-                    append_line_to_utf8_file(schuessler_output, smsg_out)
-
-
-                tup_list = []
-                #
-                # add Nodes
-                for rw_inc in rw_words[line_k]:
-                    tup_list = rw_words[line_k][rw_inc]
-                    for tup in tup_list:
-                        debug_test = rw_words[line_k][rw_inc]
-
-                        rhyme_word = tup[0]#rw_words[line_k][rw_inc][0] # 0 - rhyme word, 1 - char pos in line
-                        rw_pos = tup[1]#rw_words[line_k][rw_inc][1]
-                        orig_line = tup[2]
-                        erw_words.append(rhyme_word)
-                        if self.is_naive_annotator_on():
-                            new_line = insert_rhyme_marker_at_pos(orig_line, rw_pos, 'a')
-                            msg_out += new_line + '。'
-                            print('[' + str(rw_inc) + '] ' + rhyme_word + ':' + new_line)
-                            #append_line_to_utf8_file(naive_output, msg_out)
-                        if not let_this_char_become_node(rhyme_word):
-                            continue
-                        self.rhyme_net.add_node(rhyme_word, '1', '\n'.join(poem)) # common to all data
-                        self.stelae_rnet.add_node(rhyme_word, '1', '\n'.join(poem)) # stelae only data
-                        weight = self.rhyme_net.get_node_weight(rhyme_word)
-                        self.graph.add_node(rhyme_word, weight=weight) # common to all data
-                        self.stelae_graph.add_node(rhyme_word, weight=weight) # stelae only data
-                    #
-                    # add Edges
-                    for left_inc in range(0, len(erw_words), 1):
-                        msg = '-'*40 + '\n'
-                        for right_inc in range(left_inc + 1, len(erw_words), 1):
-                            rhyme_num = s_id
-                            #d = rw_words[left_inc+1]
-                            left_rword = erw_words[left_inc]
-                            right_rword = erw_words[right_inc]
-
-                            msg += s_id + ': '
-                            msg += left_rword + ':' + right_rword + ', num_rhymes_same_type = '
-                            msg += str(len(erw_words)) + ', poem_stanza_num = ' + rhyme_num
-                            #if print_debug_msg:
-                            #print(msg) # debug only
-                            msg = ''
-                            if not let_this_char_become_node(left_rword):
-                                continue
-                            if not let_this_char_become_node(right_rword):
-                                continue
-                            self.rhyme_net.add_edge(left_rword, right_rword, len(erw_words), rhyme_num)
-                            self.stelae_rnet.add_edge(left_rword, right_rword, len(erw_words), rhyme_num)
-                            #im.add_link(rw_list[left_inc], rw_list[right_inc])
-                            edge_weight = self.rhyme_net.get_edge_weight(left_rword, right_rword)
-                            self.graph.add_edge(left_rword, right_rword, weight=edge_weight)
-                            self.stelae_graph.add_edge(left_rword, right_rword, weight=edge_weight)
-                if self.is_naive_annotator_on():
-                    append_line_to_utf8_file(naive_output, msg_out)
-                # print(msg_out)  # output to annotated file
-        self.print('\tDone.')
-
-    def naively_annotate_mao_2008_stelae_data(self):
-        funct_name = 'naively_annotate_mao_2008_stelae_data()'
-        if not self.stelae_rnet:
-            print(funct_name + ' ERROR: Run self.naively_add_mao_2008_stelae_data() before running this function.')
-            return
-
+            print(s_id + ': ' + '\n'.join(poem))
 
     def naively_get_rhyme_words(self):
         funct_name = 'naively_get_rhyme_words()'
+        rhyme_net = self.get_network_object('network', 'naive', 'combo')
         for s_id in self.uniq2data_dict:
             poem = self.uniq2data_dict[s_id].get_poem_content()
             #print(s_id + '\t' + '\n'.join(poem))
@@ -2224,8 +2597,8 @@ class multi_dataset_processor:
                 #
                 # add Nodes
                 for rhyme_word in rw_words:
-                    self.rhyme_net.add_node(rhyme_word, '1', '\n'.join(poem))
-                    weight = self.rhyme_net.get_node_weight(rhyme_word)
+                    rhyme_net.add_node(rhyme_word, '1', '\n'.join(poem))
+                    weight = rhyme_net.get_node_weight(rhyme_word)
                 #
                 # add Edges
                 for left_inc in range(0, len(rw_words), 1):
@@ -2238,167 +2611,866 @@ class multi_dataset_processor:
                         #if print_debug_msg:
                         #print(msg) # debug only
                         msg = ''
-                        self.rhyme_net.add_edge(rw_words[left_inc], rw_words[right_inc], len(rw_words), rhyme_num)
+                        rhyme_net.add_edge(rw_words[left_inc], rw_words[right_inc], len(rw_words), rhyme_num)
                         #im.add_link(rw_list[left_inc], rw_list[right_inc])
-                        edge_weight = self.rhyme_net.get_edge_weight(rw_words[left_inc], rw_words[right_inc])
+                        edge_weight = rhyme_net.get_edge_weight(rw_words[left_inc], rw_words[right_inc])
 
-    def naively_add_kyomeishusei2015_han_mirror_data(self):
-        funct_name = 'naively_add_kyomeishusei2015_han_mirror_data()'
-        self.print('Naively adding Kyomeishusei2015 mirror data...')
-        id2inscription = readin_kyomeishusei2015_han_mirror_data()
-        no_punct = []
-        w_punct = []
-        #im = Infomap("--two-level --directed")
-        #rhyme_net = rnetwork()
-        for id in id2inscription:
-            # print(id + ': ' + '\n'.join(id2inscription[id]))
-            # if len(id2inscription[id]) != 1:
-            #    print('len: ' + str(len(id2inscription[id])))
-            #    if 0 and len(id2inscription[id]) > 2 and len(id2inscription[id]) < 502:
-            #        print('*'*100)
-            for l in id2inscription[id]:
-                rw_words = get_rhyme_words_for_kmss2015_mirror_inscription(id, l, use_unpunctuated=False)
-                #rhymes = ','.join(rw_words)
-                rhymes = []
-                for e in rw_words:
-                    try:
-                        rhymes.append(e[0])
-                    except:
-                        x = 1
-                rhymes = ','.join(rhymes)
-                rhymes = rhymes[0:len(rhymes) - 1]
-                print(id + ': ' + '\n'.join(id2inscription[id]) + ', RHYME WORDS: ' + rhymes)
-                if rw_words:  # if there are any rhyme words...
-                    #
-                    # add Nodes
-                    for rhyme_word in rw_words:
-                        if not rhyme_word:
-                            continue
-                        rhyme_word = rhyme_word[0]
-                        if not let_this_char_become_node(rhyme_word):
-                            continue
-                        self.rhyme_net.add_node(rhyme_word, '1', '\n'.join(id2inscription[id])) # common data
-                        self.mirror_rnet.add_node(rhyme_word, '1', '\n'.join(id2inscription[id])) # mirror only data
-                        weight = self.rhyme_net.get_node_weight(rhyme_word)
-                        self.graph.add_node(rhyme_word, weight=weight) # common data
-                        self.mirror_graph.add_node(rhyme_word, weight=weight) # mirror only data
-                    #
-                    # add Edges
-                    for left_inc in range(0, len(rw_words), 1):
-                        msg = '-' * 40 + '\n'
-                        for right_inc in range(left_inc + 1, len(rw_words), 1):
-                            rhyme_num = id
-                            msg += id + ': '
-                            left_rw = rw_words[left_inc][0]
-                            right_rw = rw_words[right_inc][0]
-                            msg += left_rw + ':' + right_rw + ', num_rhymes_same_type = '
-                            msg += str(len(rw_words)) + ', poem_stanza_num = ' + rhyme_num
-                            # if print_debug_msg:
-                            # print(msg) # debug only
-                            msg = ''
-                            if not let_this_char_become_node(left_rw):
-                                continue
-                            if not let_this_char_become_node(right_rw):
-                                continue
-                            self.rhyme_net.add_edge(left_rw, right_rw, len(rw_words), rhyme_num)
-                            self.mirror_rnet.add_edge(left_rw, right_rw, len(rw_words), rhyme_num)
-                            # im.add_link(rw_list[left_inc], rw_list[right_inc])
-                            edge_weight = self.rhyme_net.get_edge_weight(left_rw, right_rw)
-                            self.graph.add_edge(left_rw, right_rw, weight=edge_weight)
-                            self.mirror_graph.add_edge(left_rw, right_rw, weight=edge_weight)
-        #nodes_n_edges = rhyme_net.print_all_nodes_n_edges(is_verbose=True)
-        self.print('\tDone.')
+    def are_there_lu1983_rhyme_words(self, line2rw_list):
+        funct_name = 'are_there_lu1983_rhyme_words()'
+        retval = False
+        for tup in line2rw_list:
+            if tup[0] != '':
+                retval = True
+                break
+        return retval
 
-    def naively_add_lu1983_to_network(self, is_verbose=False):
-        funct_name = 'naively_add_lu1983_to_network()'
-        self.print('Naively adding Lu1983 data...')
-        readin_lu_1983_data()
-        LU_poem = lu1983_poem()
-        LU_poem.set_data_labels(lu1983_labels)
+    def create_network_for_combo_data_with_com_det_annotator(self):
+        funct_name = 'create_network_for_combo_data_with_com_det_annotator()'
+        filename_storage = filename_depot()
+        com_det_file = filename_storage.get_filename_for_combined_data_community_detection()
+        #com_det_file = get_com_det_group_descriptions_for_combo_data()
+        if not os.path.isfile(com_det_file):
+            print_debug_message(funct_name + ' ERROR: Community Detection Results file does NOT exist.',True)
+            print_debug_message('\tRun combo community detection before running this function.')
+            return
+        desired_groups = []
+        rw2group_dict, group2rw_list = readin_community_detection_group_descriptions(com_det_file, desired_groups)
+        g2c = group2color()
+        received_shi = self.create_network_for_received_shi_with_com_det_annotator()
+        mirrors = self.create_network_for_mirrors_with_com_det_annotator()
+        stelae = self.create_network_for_stelae_with_com_det_annotator()
+        combo = self.initialize_pyvis_network('Combo Data with Com Det Annotator')
+        rs_nodes = received_shi.get_nodes()
+        received_net = self.get_network_object('network', 'naive', 'received_shi')
+        for n in rs_nodes:
+            if n in rw2group_dict:
+                group_info = rw2group_dict[n][0]
+                g_num = group_info[0]
+            else:
+                g_num = 5000
+            color = g2c.given_group_num_get_color(g_num)
+            n_weight = received_net.get_node_weight(n)
+            combo.add_node(n, label=n, color=color, shape='circle', value=n_weight) #add_node(n, label=n, title=rhyme, color=color)
+        m_nodes = mirrors.get_nodes()
+        mirror_rnet = self.get_network_object('network', 'naive', 'mirrors')
+        for n in m_nodes:
+            if n in rw2group_dict:
+                group_info = rw2group_dict[n][0]
+                g_num = group_info[0]
+            else:
+                g_num = 5000
+            color = g2c.given_group_num_get_color(g_num)
+            n_weight = mirror_rnet.get_node_weight(n)
+            combo.add_node(n, label=n, color=color, shape='circle', value=n_weight) #add_node(n, label=n, title=rhyme, color=color)
+        s_nodes = stelae.get_nodes()
+        stelae_rnet = self.get_network_object('network', 'naive', 'stelae')
+        for n in s_nodes:
+            if n in rw2group_dict:
+                group_info = rw2group_dict[n][0]
+                g_num = group_info[0]
+            else:
+                g_num = 5000
+            color = g2c.given_group_num_get_color(g_num)
+
+            n_weight = stelae_rnet.get_node_weight(n)
+            combo.add_node(n, label=n, color=color, shape='circle', value=n_weight) #add_node(n, label=n, title=rhyme, color=color)
+        rs_edges = received_shi.get_edges()
+        received_net = self.get_network_object('network', 'naive', 'received_shi')
+        for e in rs_edges:
+            if e['from'] in rw2group_dict:
+                group_info = rw2group_dict[e['from']][0]
+                g_num = group_info[0]
+            else:
+                g_num = 5000
+            color = g2c.given_group_num_get_color(g_num)
+            e_weight = received_net.get_edge_weight(e['from'], e['to'])
+            combo.add_edge(e['from'], e['to'], color=color, value=e_weight)
+        m_edges = mirrors.get_edges()
+        for e in m_edges:
+            if e['from'] in rw2group_dict:
+                group_info = rw2group_dict[e['from']][0]
+                g_num = group_info[0]
+            else:
+                g_num = 5000
+            color = g2c.given_group_num_get_color(g_num)
+            e_weight = mirror_rnet.get_edge_weight(e['from'], e['to'])
+            combo.add_edge(e['from'], e['to'], color=color, value=e_weight)
+        s_edges = stelae.get_edges()
+        for e in s_edges:
+            if e['from'] in rw2group_dict:
+                group_info = rw2group_dict[e['from']][0]
+                g_num = group_info[0]
+            else:
+                g_num = 5000
+            color = g2c.given_group_num_get_color(g_num)
+            e_weight = stelae_rnet.get_edge_weight(e['from'], e['to'])
+            combo.add_edge(e['from'], e['to'], color=color, value=e_weight)
+        combo.show('combo_data_with_com_det_annotator.html')
+
+    def create_network_for_received_shi_with_com_det_annotator(self):
+        return self.create_network_with_com_det_annotator('received_shi')
+
+    def create_network_for_mirrors_with_com_det_annotator(self):
+        return self.create_network_with_com_det_annotator('mirrors')
+
+    def create_network_for_stelae_with_com_det_annotator(self):
+        return self.create_network_with_com_det_annotator('stelae')
+
+    def create_network_with_com_det_annotator(self, data_type, desired_groups=[]):
+        funct_name = 'create_network_with_com_det_annotator()'
+        title = 'Com Det Network for ' + data_type.replace('_',' ').capitalize()
+        network_type = 'graph' # this is the type of network data in the input file; not the type of network that
+                               # will be created with this function
+        annotator_type = 'com_det'
+        pyvis_net = self.initialize_pyvis_network(title)
+        filename_storage = filename_depot()
+        com_det_file = filename_storage.get_filename_for_com_det_network_data(network_type, annotator_type, data_type)
+        #com_det_file = get_com_det_group_descriptions_for_combo_data()
+        if not os.path.isfile(com_det_file):
+            print_debug_message(funct_name + ' ERROR: Community Detection Results file does NOT exist.',True)
+            print_debug_message('\tRun combo community detection before running this function.')
+            return
+        rw2group_dict, group2rw_list = readin_community_detection_group_descriptions(com_det_file, desired_groups)
+        stanza_proc = stanza_processor(data_type)
+        #
+        # annotate Lu1983 poems with community detection
+        print_debug_msgs = True
+        every_line_rhymes = True # False: every other line rhymes, True: every line rhymes
+        #
+        # Readin input data
         uniqid2poem_dict = {}
-        test_set = []
-        s2rhyme_list = {}
-        # Command line flags can be added as a string to Infomap
-        #im = Infomap("--two-level")
-        unwanted = ['〗', '）', '}', '：', '々']
+        output_file = self.filename_storage.get_output_filename_for_annotated_poems(annotator_type, data_type)
+        html_file = output_file.replace('.txt', '.html')
+        #
+        # Readin input data
+        uniqid2poem_dict = self.readin_preparsed_data(data_type)
 
-        for k in lu1983_dict:
-            #if testing_code and k.replace('Lu1983','') not in test_set:
-            #    continue
-            LU_poem.set_data_with_line_from_file(k, lu1983_dict[k])
-            uniqid2poem_dict[k] = ''
-            uniqid2poem_dict[k] = deepcopy(LU_poem)
-        for k in uniqid2poem_dict:#lu1983_poem
+        delete_file_if_it_exists(output_file)
+        #
+        # Process each poem individually
+        poem = ''
+        g2c = group2color()
+        #name2data_segue = ': '
+        already_output = []
+        line_inc = 0
+        for k in uniqid2poem_dict:  # lu1983_poem -- for each unique poem ID...
+            if data_type == 'received_shi':
+                try:
+                    poem = uniqid2poem_dict[k].get_poem_content_as_str()
+                except TypeError as te:
+                    x = 1
+            elif data_type == 'mirrors':
+                poem = uniqid2poem_dict[k]
+                line_inc = 0
+            elif data_type == 'stelae':
+                poem = uniqid2poem_dict[k].get_poem_content_as_str()
+                line_inc = 0
+
+            print_debug_message(k + ': ' + poem, print_debug_msgs)
+            stanza_list = poem.split('\n') # '\n' doesn't denote a stanza, only "extra" blank lines do
+
+            #
+            # Process a single stanza
+            st_inc = 0
+            line_out = ''
+            len_slist = len(stanza_list)
+            for stanza in stanza_list:
+                if not stanza.strip():
+                    continue
+                #if '……' in stanza:
+                #    x = 1
+                st_inc += 1  # 1 <= st_inc <= N (here: use first, then increment)
+                try:
+                    if data_type == 'received_shi':
+                        stanza_id = uniqid2poem_dict[k].get_poem_id() + '.' + str(st_inc)
+                    elif data_type == 'stelae':
+                        stanza_id = k + '.' + str(st_inc)
+                    elif data_type == 'mirrors':
+                        stanza_id = k
+                except KeyError as ke:
+                    x = 1
+                stanza_proc.input_stanza(stanza, stanza_id, every_line_rhymes)
+                cd_annotated_stanza, rw_list = stanza_proc.annotate_with_combo_community_detection()
+                #
+                # Write annotations out to file
+                if data_type == 'received_shi':
+                    line_inc = 0
+                    for cd_as in cd_annotated_stanza:
+                        line_inc += 1
+                        try:
+                            line_out = k + '.' + str(st_inc) + '.' + str(line_inc) + '： ' + cd_as + '。'
+                        except TypeError as te:
+                            x = 1
+                        append_line_to_utf8_file(output_file, line_out)
+                else: # for stelae, mirrors
+                    if cd_annotated_stanza:
+                        for cd_as in cd_annotated_stanza:
+                            line_inc += 1
+                            #line_out += cd_as + '。'
+                            line_out = k + '.1.' + str(line_inc) + '： ' + cd_as + '。'
+                            if line_out not in already_output:
+                                already_output.append(line_out)
+                                append_line_to_utf8_file(output_file, line_out)
+                    else: # if there are no rhyme words...
+                        if not line_out:
+                            line_out = k + '.1： ' + stanza # this doesn't need to remove last \n
+                        else:
+                            line_out += ' ' + stanza
+                        if st_inc == len_slist:
+                            if line_out not in already_output: # write this out on last line
+                                already_output.append(line_out)
+                                append_line_to_utf8_file(output_file, line_out)
+                #
+                # Create network
+                group_num2simple_rw_list = {}
+                for t in rw_list:
+                    rw = t[0]
+                    if not rw:
+                        continue
+                    if rw in rw2group_dict:
+                        group_info = rw2group_dict[rw][0]
+                        group_num = group_info[0]
+                        if group_num not in group_num2simple_rw_list:
+                            group_num2simple_rw_list[group_num] = []
+                        group_num2simple_rw_list[group_num].append(rw)
+                        node_weight = group_info[1]
+                        color = g2c.given_group_num_get_color(group_num)
+                        #
+                        # Add Node
+                        pyvis_net.add_node(rw, label=rw, color=color, shape='circle', value=node_weight)
+                for g_num in group_num2simple_rw_list:
+                    rwords = group_num2simple_rw_list[g_num]
+                    edge_list = given_rhyme_group_return_list_of_edges(rwords, stanza_id)
+                    if edge_list:
+                        for el in edge_list:
+                            left = el[0]
+                            right = el[1]
+                            weight = el[2]
+                            #s_id = el[3]
+                            if left in rw2group_dict:
+                                group_info = rw2group_dict[left][0]
+                                group_num = group_info[0]
+                            color = g2c.given_group_num_get_color(group_num)
+
+                            pyvis_net.add_edge(left, right, weight=weight, color=color, value=weight)
+        pyvis_net.show(html_file)
+        return pyvis_net
+
+    # community detection is only run on naively annotated data
+    def run_community_detection(self, graph, data_type):
+        im = Infomap("--two-level")
+        annotator_type = 'com_det'
+        network_type = 'graph'
+        if 1:
+            alt.data_transformers.disable_max_rows()
+            pos = nx.spring_layout(graph)
+            # Add attributes to each node.
+            for n in graph.nodes():
+                #G.nodes[n]['weight'] = np.random.randn()
+                graph.nodes[n]['name'] = n
+
+        mapping = im.add_networkx_graph(graph)
+        print('<' + data_type + '>')
+        print(mapping.values())
+        print('</' + data_type + '>')
+        im.run()
+    # or get_filename_for_combined_data_community_detection()
+        output_file = self.filename_storage.get_filename_for_com_det_network_data(network_type, annotator_type, data_type)
+        #get_filename_for_annotated_network_data-
+        #output_file = 'com_detection_' + data_type + '_output.txt'
+        cluster_dict = {}
+        delete_file_if_it_exists(output_file)
+        cluster2zi_dict = {}
+        n2c_output_file = self.filename_storage.get_filename_for_node_id2cluster_no()
+        for node in im.nodes:
+            print(node.node_id, node.module_id, node.flow, mapping[node.node_id])
+            if node.module_id not in cluster2zi_dict:
+                cluster2zi_dict[node.module_id] = []
+            cluster2zi_dict[node.module_id].append(mapping[node.node_id])
+            output = str(node.node_id) + '\t' + str(node.module_id) + '\t' + str(node.flow) + '\t' + mapping[node.node_id]
+            append_line_to_utf8_file(n2c_output_file, str(node.node_id) + '\t' + str(node.module_id))
+            cluster_dict[node.node_id] = node.module_id
+            append_line_to_utf8_file(output_file, output)
+
+    def run_community_detection_for_lu1983(self):
+        funct_name = 'run_community_detection_for_lu1983()'
+        received_graph = self.get_network_object('graph', 'naive', 'received_shi')
+        if not received_graph:
+            print(funct_name + ' ERROR: call self.pre_com_det_processing() BEFORE calling this function!')
+            return
+        self.run_community_detection(received_graph, 'received_shi') # was: lu1983_received_shi_data
+
+    def run_community_detection_for_mirrors(self):
+        funct_name = 'run_community_detection_for_mirrors()'
+        print('Beginning ' + funct_name)
+        mirror_graph = self.get_network_object('graph', 'naive', 'mirrors')
+        if not mirror_graph:
+            print(funct_name + ' ERROR: call self.pre_com_det_processing() BEFORE calling this function!')
+            print('\tDone.')
+            return
+        self.run_community_detection(mirror_graph, 'mirrors') # was: kyomeishusei2015_mirror_data
+        print('\tDone.')
+
+#process_mao_2008_stelae_data
+    def run_community_detection_for_stelae(self):
+        funct_name = 'run_community_detection_for_stelae()'
+        stelae_graph = self.get_network_object('graph', 'naive', 'stelae')
+        if not stelae_graph:
+            print(funct_name + ' ERROR: call self.pre_com_det_processing() BEFORE calling this function!')
+            return
+        self.run_community_detection(stelae_graph, 'stelae') # was: mao_2008_stelae_data
+
+    def run_community_detection_for_combined_data(self):
+        funct_name = 'run_community_detection_for_combined_data()'
+        graph = self.get_network_object('graph', 'naive', 'combo')
+        if not graph:
+            print(funct_name + ' ERROR: call process_..._data() for each type of data you want to run BEFORE calling this function!')
+            return
+        self.run_community_detection(graph, 'combo')
+
+    def initialize_pyvis_network(self, title):
+        pyvis_net = Network('1000px', '1000px', heading=title, font_color='white')
+        options = 'var options = {  "edges": {    "color": {      "inherit": "to"    },    "smooth": false  },  "physics": {    "minVelocity": 0.75  }}'
+        pyvis_net.set_options(options)
+        return pyvis_net
+# def get_filename_for_annotated_network_data(self, network_type, annotator_type, data_type):
+    def append_edge_data_to_file(self, annotator_type, data_type, left_char, right_char, num_rhymes_or_weight=-1, rhyme_id=''):
+        funct_name = 'append_edge_data_to_file()'
+        network_type = 'network'
+        delim = '\t'
+        output = left_char + delim + right_char
+        if not rhyme_id: # if network type is 'graph'
+            network_type = 'graph'
+            if num_rhymes_or_weight > -1:
+                output += delim + str(num_rhymes_or_weight)
+        else: # otherwise, it's 'network'
+            #network_type = 'network' # left_char, right_char, num_rhymes, rhyme_id
+            output += delim + str(num_rhymes_or_weight) + delim + rhyme_id
+        output_file = self.get_filename_for_annotated_network_data(network_type, annotator_type, data_type)
+        append_line_to_utf8_file(output_file, output)
+
+    def add_edge(self, left_char, right_char, num_rhymes, rhyme_id, annotator_type, data_type):
+        test_left_char = ''
+        test_right_char = ''
+        if annotator_type == 'naive':
+            test_left_char = left_char
+            test_right_char = right_char
+        elif annotator_type == 'schuessler':
+            test_left_char = self.strip_lhan_from_rhyme_word(left_char)
+            test_right_char = self.strip_lhan_from_rhyme_word(right_char)
+        if any(unw in test_left_char for unw in self.unwanted):  # can be outside function, use when
+                                                                 # evaluating the list of edges
+            return
+        if any(unw in test_right_char for unw in self.unwanted):
+            return
+        if not let_this_char_become_node(test_left_char):
+            return
+        if not let_this_char_become_node(test_right_char):
+            return
+        rhyme_net = self.get_network_object('network', 'naive', 'combo')
+        edge_weight = rhyme_net.get_edge_weight(left_char, right_char)
+        s_rhyme_net = self.get_network_object('network', 'schuessler', 'combo')
+        s_edge_weight = s_rhyme_net.get_edge_weight(left_char, right_char)
+        if annotator_type == 'naive' and self.is_naive_annotator_on():
+            pyvis_naive_combo = self.get_network_object('pyvis', 'naive', 'combo')
+            pyvis_naive_combo.add_edge(left_char, right_char, value=edge_weight)
+            rhyme_net.add_edge(left_char, right_char, num_rhymes, rhyme_id)
+            graph = self.get_network_object('graph', 'naive', 'combo')
+            graph.add_edge(left_char, right_char, weight=edge_weight)
+            self.append_edge_data_to_file(annotator_type, data_type, left_char, right_char, num_rhymes, rhyme_id) # Network
+            self.append_edge_data_to_file(annotator_type, data_type, left_char, right_char, edge_weight) # Graph
+        elif annotator_type == 'schuessler' and self.is_schuessler_annotator_on():
+            pyvis_schuessler_combo = self.get_network_object('pyvis', 'schuessler', 'combo')
+            pyvis_schuessler_combo.add_edge(left_char, right_char, value=s_edge_weight)
+            s_rhyme_net.add_edge(left_char, right_char, num_rhymes, rhyme_id)
+            self.append_edge_data_to_file(annotator_type, data_type, left_char, right_char, num_rhymes, rhyme_id)  # Network
+        if data_type == 'received_shi':
+            if annotator_type == 'naive' and self.is_naive_annotator_on():
+                received_net = self.get_network_object('network', 'naive', 'received_shi')
+                received_net.add_edge(left_char, right_char, num_rhymes, rhyme_id)
+                received_graph = self.get_network_object('graph', 'naive', 'received_shi')
+                received_graph.add_edge(left_char, right_char, weight=edge_weight)
+            elif annotator_type == 'schuessler' and self.is_schuessler_annotator_on():
+                s_received_net = self.get_network_object('network', 'schuessler', 'received_shi')
+                s_received_net.add_edge(left_char, right_char, num_rhymes, rhyme_id)
+        elif data_type == 'stelae':
+            if annotator_type == 'naive' and self.is_naive_annotator_on():
+                stelae_rnet = self.get_network_object('network', 'naive', 'stelae')
+                stelae_rnet.add_edge(left_char, right_char, num_rhymes, rhyme_id)
+                stelae_graph = self.get_network_object('graph', 'naive', 'stelae')
+                stelae_graph.add_edge(left_char, right_char, weight=edge_weight)
+            elif annotator_type == 'schuessler' and self.is_schuessler_annotator_on():
+                s_stelae_rnet = self.get_network_object('network', 'schuessler', 'stelae')
+                s_stelae_rnet.add_edge(left_char, right_char, num_rhymes, rhyme_id)
+        elif data_type == 'mirrors':
+            if annotator_type == 'naive' and self.is_naive_annotator_on():
+                mirror_rnet = self.get_network_object('network', 'naive', 'mirrors')
+                mirror_rnet.add_edge(left_char, right_char, num_rhymes, rhyme_id)
+                mirror_graph = self.get_network_object('graph', 'naive', 'mirrors')
+                mirror_graph.add_edge(left_char, right_char, weight=edge_weight)
+            elif annotator_type == 'schuessler' and self.is_schuessler_annotator_on():
+                s_mirror_rnet = self.get_network_object('network', 'schuessler', 'mirrors')
+                s_mirror_rnet.add_edge(left_char, right_char, num_rhymes, rhyme_id)
+    #
+    # TO DO:
+    # create another function for 'graph' types
+
+    def create_network_from_file_data(self, network_type, annotator_type, data_type):
+        funct_name = 'create_network_from_file_data()' # class.name = multi_dataset_processor
+        input_file = self.get_filename_for_annotated_network_data(network_type, annotator_type, data_type)
+        if not if_file_exists(input_file, funct_name):
+            return
+        rhyme_net = rnetwork(self.class_name + '::create_network_from_file_data')
+        #
+        # set up visualization network
+        annotator_type, data_type, network_type = self.parse_filename_for_annotated_network_data(input_file)
+        heading = annotator_type + ' Annotator for ' + data_type
+        pyvis_net = Network('1000px', '1000px', heading=heading, font_color='white')
+        options = 'var options = {  "edges": {    "color": {      "inherit": "to"    },    "smooth": false  },  "physics": {    "minVelocity": 0.75  }}'
+        pyvis_net.set_options(options)
+        #
+        # readin file data
+        file_data = readlines_of_utf8_file(input_file)
+
+        # naive graph:
+        #   self.append_node_data_to_file(annotator_type, data_type, rhyme_word, str(weight))
+
+        #
+        # Add data to rnetwork() network (need this to get correct node weights)
+        for fd in file_data:
+            fd = fd.split('\t')
+            print('\t'.join(fd))
+            if is_hanzi(fd[1]): # is EDGE: if second item is a hanzi; Ex. 皇	堂	3	Lu1983.020.1
+                left_char = fd[0]
+                right_char = fd[1]
+                num_rhymes = fd[2]
+                weight = calculate_edge_weight_given_num_rhymes(num_rhymes)
+                rhyme_id = fd[3]
+                rhyme_net.add_edge(left_char, right_char, num_rhymes, rhyme_id)
+            elif fd[1].isdigit(): # is NODE: Ex. 下	1	知我好道公來下兮
+                node = fd[0]
+                st_inc = fd[1]
+                orig_line = fd[2]
+                rhyme_net.add_node(node, str(st_inc), orig_line)
+        #
+        # Now add data to visualization network
+        for fd in file_data:
+            fd = fd.split('\t')
+            print('\t'.join(fd))
+            if is_hanzi(fd[1]): # is EDGE: if second item is a hanzi; Ex. 皇	堂	3	Lu1983.020.1
+                left_char = fd[0]
+                right_char = fd[1]
+                num_rhymes = fd[2]
+                weight = calculate_edge_weight_given_num_rhymes(num_rhymes)
+                #rhyme_id = fd[3]
+                pyvis_net.add_edge(left_char, right_char, value=weight)
+            elif fd[1].isdigit(): # is NODE: Ex. 下	1	知我好道公來下兮
+                node = fd[0]
+                #st_inc = fd[1]
+                #orig_line = fd[2]
+                weight = rhyme_net.get_node_weight(node)
+                pyvis_net.add_node(node, label=node, value=weight, shape='circle')
+        pyvis_net.show(heading + '.html')
+
+    def append_node_data_to_file(self, annotator_type, data_type, rhyme_word, st_inc_or_weight, orig_line='', lhan=''):
+        funct_name = 'append_node_data_to_file()'
+        # 'network' => add_node(rhyme_word, str(st_inc), orig_line) OR add_node(rhyme_word, str(st_inc), orig_line, lhan)
+        # 'graph' => add_node(rhyme_word, weight=weight)
+        output = rhyme_word
+        network_type = 'network'
+        delim = '\t'
+        if not orig_line:
+            network_type = 'graph'
+            if st_inc_or_weight:
+                output += delim + str(st_inc_or_weight)
+        else: # if 'network' type
+            output += delim + str(st_inc_or_weight) + delim + orig_line
+            if lhan:
+                output += delim + lhan
+        output_file = self.get_filename_for_annotated_network_data(network_type, annotator_type, data_type)
+        append_line_to_utf8_file(output_file, output)
+
+    def add_node(self, rhyme_word, st_inc, orig_line, annotator_type, data_type):
+        if any(unw in rhyme_word for unw in self.unwanted):
+            return
+        rhyme_net = self.get_network_object('network', 'naive', 'combo')
+        weight = rhyme_net.get_node_weight(rhyme_word)
+        s_rhyme_net = self.get_network_object('network', 'schuessler', 'combo')
+        s_weight = s_rhyme_net.get_node_weight(rhyme_word)
+        if annotator_type == 'naive' and self.is_naive_annotator_on():
+            pyvis_naive_combo = self.get_network_object('pyvis', 'naive', 'combo')
+            pyvis_naive_combo.add_node(rhyme_word, label=rhyme_word, shape='circle', value=weight)#weight
+            rhyme_net.add_node(rhyme_word, str(st_inc), orig_line)  # (zi, poem_stanza_num, raw_line)
+            graph = self.get_network_object('graph', 'naive', 'combo')
+            graph.add_node(rhyme_word, weight=weight)  # common data
+            #
+            # record network data
+            self.append_node_data_to_file(annotator_type, data_type, rhyme_word, str(st_inc), orig_line) # network
+            self.append_node_data_to_file(annotator_type, 'combo', rhyme_word, str(st_inc), orig_line) # network
+            #
+            # record graph data
+            self.append_node_data_to_file(annotator_type, data_type, rhyme_word, str(weight))  # graph
+            self.append_node_data_to_file(annotator_type, 'combo', rhyme_word, str(weight))  # graph
+        elif annotator_type == 'schuessler' and self.is_schuessler_annotator_on():
+            pyvis_schuessler_combo = self.get_network_object('pyvis', 'schuessler', 'combo')
+            pyvis_schuessler_combo.add_node(rhyme_word, title=self.strip_lhan_from_rhyme_word(rhyme_word),
+                                                label=rhyme_word, shape='circle', value=s_weight)
+            lhan = self.grab_lhan_from_rhyme_word(rhyme_word)
+            rhyme_word = self.strip_lhan_from_rhyme_word(rhyme_word)
+            self.append_node_data_to_file(annotator_type, data_type, rhyme_word, str(st_inc), orig_line, lhan)
+            self.append_node_data_to_file(annotator_type, 'combo', rhyme_word, str(st_inc), orig_line, lhan)
+
+        if data_type == 'received_shi':
+            if annotator_type == 'naive' and self.is_naive_annotator_on():
+                received_net = self.get_network_object('network', 'naive', 'received_shi')
+                received_net.add_node(rhyme_word, str(st_inc), orig_line)
+                received_graph = self.get_network_object('graph', 'naive', 'received_shi')
+                received_graph.add_node(rhyme_word, weight=weight)  # received data only
+            elif annotator_type == 'schuessler' and self.is_schuessler_annotator_on():
+                s_rhyme_net = self.get_network_object('network', 'schuessler', 'combo')
+                s_rhyme_net.add_node(rhyme_word, str(st_inc), orig_line, lhan)
+                s_received_net = self.get_network_object('network', 'schuessler', 'received_shi')
+                s_received_net.add_node(rhyme_word,str(st_inc), orig_line, lhan)
+        elif data_type == 'stelae':
+            if annotator_type == 'naive' and self.is_naive_annotator_on():
+                stelae_rnet = self.get_network_object('network', 'naive', 'stelae')
+                stelae_rnet.add_node(rhyme_word, str(st_inc), orig_line)  # stelae only data
+                stelae_graph = self.get_network_object('graph', 'naive', 'stelae')
+                stelae_graph.add_node(rhyme_word, weight=weight)  # stelae only data
+            elif annotator_type == 'schuessler' and self.is_schuessler_annotator_on():
+                s_rhyme_net = self.get_network_object('network', 'schuessler', 'combo')
+                s_rhyme_net.add_node(rhyme_word, str(st_inc), orig_line, lhan)
+                s_stelae_rnet = self.get_network_object('network', 'schuessler', 'stelae')
+                s_stelae_rnet.add_node(rhyme_word, str(st_inc), orig_line, lhan)
+        elif data_type == 'mirrors':
+            if annotator_type == 'naive' and self.is_naive_annotator_on():
+                mirror_rnet = self.get_network_object('network', 'naive', 'mirrors')
+                mirror_rnet.add_node(rhyme_word, str(st_inc), orig_line)  # mirror only data
+                mirror_graph = self.get_network_object('graph', 'naive', 'mirrors')
+                mirror_graph.add_node(rhyme_word, weight=weight)  # mirror only data
+            elif annotator_type == 'schuessler' and self.is_schuessler_annotator_on():
+                s_rhyme_net = self.get_network_object('network', 'schuessler', 'combo')
+                s_rhyme_net.add_node(rhyme_word, str(st_inc), orig_line, lhan)  # common data
+                s_mirror_rnet = self.get_network_object('network', 'schuessler', 'mirrors')
+                s_mirror_rnet.add_node(rhyme_word, str(st_inc), orig_line, lhan)  # mirror only data
+
+    # ASSUMES input as: '{zi} ({lhan})'
+    def grab_lhan_from_rhyme_word(self, rw):
+        if '(' in rw:
+            rw = rw.split('(')[1]
+            rw = rw.replace(')','')
+        return rw
+
+    # ASSUMES input as: '{zi} ({lhan})'
+    def strip_lhan_from_rhyme_word(self, rw):
+        if '(' in rw:
+            rw = rw.split('(')[0].strip()
+        return rw
+
+    def annotate_char_with_rhyme(self, zi, rhyme):
+        retval = zi
+        if rhyme.strip():
+            retval = zi + ' (' + rhyme + ')'
+        return retval
+
+    #def delete_old_data_files_for_received_shi(self):
+    #    x = 1
+    def delete_old_data_files(self, data_type):
+        if self.if_reprocess_old_data():
+            if self.is_naive_annotator_on():
+                delete_file_if_it_exists(self.get_filename_for_annotated_network_data('network', 'naive', data_type))
+                delete_file_if_it_exists(self.get_filename_for_annotated_network_data('graph', 'naive', data_type))
+                delete_file_if_it_exists(self.get_filename_for_annotated_network_data('network', 'naive', 'combo'))
+                delete_file_if_it_exists(self.get_filename_for_annotated_network_data('graph', 'naive', 'combo'))
+
+            if self.is_schuessler_annotator_on():
+                delete_file_if_it_exists(
+                    self.get_filename_for_annotated_network_data('network', 'schuessler', data_type))
+                delete_file_if_it_exists(
+                    self.get_filename_for_annotated_network_data('graph', 'schuessler', data_type))
+                delete_file_if_it_exists(
+                    self.get_filename_for_annotated_network_data('network', 'schuessler', 'combo'))
+                delete_file_if_it_exists(
+                    self.get_filename_for_annotated_network_data('graph', 'schuessler', 'combo'))
+
+    # INPUTS:
+    #   is_verbose
+    #   print_debug_msgs
+    #   data_type
+    #   annotator_type
+    # OUTPUTS:
+    #   naive pyvis network
+    #   schuessler pyvis network
+    #   naive annotated file
+    #   schuessler annotated file
+    def readin_preparsed_data(self, data_type):
+        if data_type == 'received_shi':
+            uniqid2poem_dict = readin_lu_1983_data()
+            #every_line_rhymes = False
+        elif data_type == 'stelae':
+            s_data = parse_mao_2008_stelae_data(is_verbose=True)
+            uniqid2poem_dict = s_data.get_uniq2data_dict()
+        elif data_type == 'mirrors':
+            uniqid2poem_dict = readin_kyomeishusei2015_han_mirror_data()
+        return uniqid2poem_dict
+    # INPUTS:
+    #   is_verbose
+    #   print_debug_msgs
+    #   data_type
+    # OUTPUTS:
+    #   naive pyvis network
+    #   schuessler pyvis network
+    #   naive annotated file
+    #   schuessler annotated file
+    def pre_com_det_processing(self, data_type, is_verbose=False, print_debug_msgs=False):
+        funct_name = 'pre_com_det_processing(' + data_type + ')'  # class multi_dataset_processor
+        self.print('Processing ' + data_type + ' data...')
+        x = self.class_name
+        test_mode = False
+        filename_storage = filename_depot()
+        if self.if_reprocess_old_data() and not test_mode:
+            self.delete_old_data_files(data_type)
+        # self.class_name: multi_dataset_processor
+        naive_output = ''
+        schuessler_output = ''
+        naive_rw_skipped = []
+        s_annotator = schuessler_stanza_annotator()
+        color_store = rhyme_color_tracker()
+        pyvis_s_net = Network('1000px', '1000px', heading='Schuessler Annotator for ' + data_type, font_color='white')
+        pyvis_n_net = Network('1000px', '1000px', heading='Pre-Com Det Naive Annotator for ' + data_type,
+                             font_color='white')
+        options = 'var options = {  "edges": {    "color": {      "inherit": "to"    },    "smooth": false  },  "physics": {    "minVelocity": 0.75  }}'
+        pyvis_s_net.set_options(options)
+        pyvis_n_net.set_options(options)
+
+        if self.is_naive_annotator_on():
+            naive_output = filename_storage.get_output_filename_for_poem_marking_annotation(data_type, 'naive', test_mode)
+            #if data_type == 'received_shi':
+            #    naive_output = os.path.join(get_received_shi_dir(), 'naively_annotated_Lu_1983_先秦漢魏晉南北朝詩.txt')
+            delete_file_if_it_exists(naive_output)
+        if self.is_schuessler_annotator_on():
+            schuessler_output = filename_storage.get_output_filename_for_poem_marking_annotation(data_type, 'schuessler', test_mode)
+            #if data_type == 'recieved_shi':
+            #    schuessler_output = os.path.join(get_received_shi_dir(), 'schuessler_annotated_Lu_1983_先秦漢魏晉南北朝詩.txt')
+            delete_file_if_it_exists(schuessler_output)
+            schuessler = schuessler_n_bentley()
+
+        s_annotator.reset()
+
+        every_line_rhymes = True  # False -> assumed to rhyme every other line, starting with the second line
+                                  # True -> every line rhymes, starting with the first line
+        if data_type == 'received_shi':
+            every_line_rhymes = False
+
+        #
+        # Readin input data
+        uniqid2poem_dict = self.readin_preparsed_data(data_type)
+
+        stanza_proc = stanza_processor(data_type)
+
+        #
+        # Process each poem individually
+        for k in uniqid2poem_dict:  # lu1983_poem -- for each unique poem ID...
+            poem_num = int(k.split('.')[1]) # debug only
+            if poem_num <= 0: # debug only - was 181
+                continue# debug only
             if is_verbose:
-                print('-'*50)
-            poem = uniqid2poem_dict[k].get_poem_content_as_str()
-            if is_verbose:
-                print(k + ': ' + poem)
+                print('-' * 50)
+            if 'Lu1983.226' in k:  # these poems choke the fayin path optimizier
+                x = 1
+                continue
+            if 'Lu1983.428' in k:
+                x = 1
+                continue
+            if 'Mou2008.060' in k:
+                continue
+
+            if data_type == 'received_shi' or data_type == 'stelae':
+                poem = uniqid2poem_dict[k].get_poem_content_as_str()
+            elif data_type == 'mirrors':
+                poem = uniqid2poem_dict[k]
+            else:
+                print(funct_name + ' ERROR: unsupported data type: ' + data_type)
+                print('\tAborting.')
+                return
+            print_debug_message(k + ': ' + poem, print_debug_msgs)
             stanza_list = poem.split('\n')
+
             st_inc = 0
             #
             # The naive annotator assumes:
             # - that all words in a single stanza that appear in a rhyming position rhyme together
-            # - the last character of every other line (starting on line 2) rhyme
+            # - For 'received_shi', that's the last character of every other line (starting on line 2) rhyme
+            # - for 'mirrors' and 'stelae', that's the last character of every line
+            #  -> this is set by the 'every_line_rhymes' variable
+            # Process a single stanza
             for stanza in stanza_list:
                 if not stanza.strip():
                     continue
+                s_annotator.reset()  # should be reset in between stanzas
                 st_inc += 1
-                unique_id = uniqid2poem_dict[k].get_poem_id() + '.' + str(st_inc)
-                most_common_line_length = characterize_stanza_structure(stanza)
-                if most_common_line_length < 0:
+                try:
+                    if data_type == 'mirrors':
+                        poem_id = k
+                        #temp_id = int(poem_id.split('.')[1])
+                        #if temp_id == 125:
+                        #    x = 1
+                    else:
+                        poem_id = uniqid2poem_dict[k].get_poem_id()
+                    stanza_id = poem_id + '.' + str(st_inc)
+                except KeyError as ke:
+                    x = 1
+                # rhyme words (rw) on per stanza basis
+                #
+                # Do actual annotation (place markers in poems, write to file)
+                #    and add Nodes
+                stanza_proc.input_stanza(stanza, stanza_id, every_line_rhymes)
+                #
+                #   For Naive Annotator
+                temp_file = filename_storage.get_filename_for_temp_naively_annotated_data(data_type)
+                annotated_stan, rijm_lijst = stanza_proc.naively_annotate(temp_file)
+                #
+                if not annotated_stan: # if there are no rhymes in the stanza...
+                    append_line_to_output_file(naive_output, stanza_id + '： ' + stanza)
+                    append_line_to_output_file(schuessler_output, stanza_id + '： ' + stanza)
                     continue
-                rw2line_dict = get_rhyme_words_naively(stanza, most_common_line_length, unique_id)
-                # print stanza, show rhyme chars
-                #for l in stanza:
-                if len(rw2line_dict) > 1:
-                    print(unique_id + ': ' + stanza)
-                    print('Rhyme list = \'' + '\', \''.join(rw2line_dict.keys()) + '\'')
-                    #
-                    # Add Nodes to the rhyme network
-                    for rhyme_word in rw2line_dict:
-                        tup = rw2line_dict[rhyme_word][0]
-                        if not let_this_char_become_node(rhyme_word):
-                            continue
-                        self.rhyme_net.add_node(rhyme_word, tup[1], tup[0])
-                        self.received_net.add_node(rhyme_word, tup[1], tup[0])
-                        weight = self.rhyme_net.get_node_weight(rhyme_word)
-                        if any(unw in rhyme_word for unw in unwanted):
-                            continue
-                        self.graph.add_node(rhyme_word, weight=weight) # common data
-                        self.received_graph.add_node(rhyme_word, weight=weight) # received data only
-                    #
-                    # Add Edges to the rhyme network
-                    rw_list = [*rw2line_dict]
-                    num_rhymes_in_stanza = len(rw_list)#len(stanza_list)
-                    for left_inc in range(0, num_rhymes_in_stanza, 1):
-                        msg = '-'*40 + '\n'
-                        for right_inc in range(left_inc + 1, num_rhymes_in_stanza, 1):
-                            rhyme_num = unique_id
-                            msg += unique_id + ': '
-                            msg += rw_list[left_inc] + ':' + rw_list[right_inc] + ', num_rhymes_same_type = '
-                            msg += str(num_rhymes_in_stanza) + ', poem_stanza_num = ' + rhyme_num
-                            #if print_debug_msg:
-                            #print(msg) # debug only
-                            msg = ''
-                            if any(unw in rw_list[left_inc] for unw in unwanted):
-                                continue
-                            if any(unw in rw_list[right_inc] for unw in unwanted):
-                                continue
-                            if not let_this_char_become_node(rw_list[left_inc]):
-                                continue
-                            if not let_this_char_become_node(rw_list[right_inc]):
-                                continue
 
-                            self.rhyme_net.add_edge(rw_list[left_inc], rw_list[right_inc], num_rhymes_in_stanza, rhyme_num)
-                            self.received_net.add_edge(
-                                rw_list[left_inc], rw_list[right_inc], num_rhymes_in_stanza, rhyme_num)
-                            edge_weight = self.rhyme_net.get_edge_weight(rw_list[left_inc], rw_list[right_inc])
-                            left = rw_list[left_inc]
-                            right = rw_list[right_inc]
-                            self.graph.add_edge(rw_list[left_inc], rw_list[right_inc], weight=edge_weight)
-                            self.received_graph.add_edge(rw_list[left_inc], rw_list[right_inc], weight=edge_weight)
+                linc = 0
+                rw_list = []
+                received_net = self.get_network_object('network', 'naive', 'received_shi')
+                for lijn in rijm_lijst:
+                    rijm = lijn[0].strip()
+                    line_id = lijn[3]
+                    orig_line = lijn[2]
+                    #
+                    # Annotate
+                    try:
+                        annotated_line = line_id + '： ' + annotated_stan[linc] + '。'
+                    except IndexError as ie:
+                        x = 1
+                    append_line_to_utf8_file(naive_output, annotated_line)
+                    if rijm:  # Add node
+                        self.add_node(rijm, st_inc, orig_line, 'naive', data_type)
+                        n_weight = received_net.get_node_weight(rijm)
+                        pyvis_n_net.add_node(rijm, label=rijm, shape='circle', value=n_weight)
+                        rw_list.append(rijm)
+                    linc += 1
+                #
+                # Add Edges for Naive Annotator
+                edge_list = given_rhyme_group_return_list_of_edges(rw_list, stanza_id)
+                rhyme_num = stanza_id  # = poem_id + '.' + str(stanza_num)
+                #received_net = self.get_network_object('network', 'naive', 'received_shi')
+                for edge in edge_list:
+                    left_char = edge[0]
+                    right_char = edge[1]
+                    num_rhymes = edge[2]
+                    rhyme_id = edge[3]
+                    edge_weight = received_net.get_edge_weight(left_char, right_char)
+                    pyvis_n_net.add_edge(left_char, right_char, value=edge_weight)
+                    self.add_edge(left_char, right_char, num_rhymes, rhyme_id, 'naive', data_type)
+
+                #
+                #   For Schuessler Annotator
+                s_annotated_stan, s_rijm_lijst, rw2lhan_dict, rhyme2rw_list = stanza_proc.schuessler_annotate()
+                s_linc = 0
+                s_received_net = self.get_network_object('network', 'schuessler', 'received_shi')
+                for s_lijn in s_rijm_lijst:
+                    line_id = s_lijn[3]
+                    orig_line = s_lijn[2]
+                    rw_pos = s_lijn[1]
+                    s_rijm = s_lijn[0].strip()
+                    #
+                    # Annotate
+                    s_annotated_line = line_id + '： ' + s_annotated_stan[s_linc] + '。'
+                    append_line_to_utf8_file(schuessler_output, s_annotated_line)
+
+                    if s_rijm:  # Add node
+                        lhan = rw2lhan_dict[s_rijm]
+                        rhyme = get_rhyme_from_schuessler_late_han_syllable(lhan)
+                        plain_rw = s_rijm
+                        s_rijm = self.annotate_char_with_rhyme(s_rijm, rhyme)
+                        self.add_node(s_rijm, st_inc, orig_line, 'schuessler', data_type)
+                        n_weight = s_received_net.get_node_weight(plain_rw)
+                        pyvis_s_net.add_node(s_rijm, title=plain_rw, label=s_rijm, shape='circle', value=n_weight)
+                        s_annotator.add_rhyme_word(plain_rw, rw_pos, orig_line, line_id)
+                        color_store.add_rhyme_word(plain_rw)
+
+                    s_linc += 1
+                #
+                # Add Schuessler Edges
+                #s_received_net = self.get_network_object('network', 'schuessler', 'received_shi')
+                for r in rhyme2rw_list:
+                    rw_list = rhyme2rw_list[r]
+                    edge_list = given_rhyme_group_return_list_of_edges(rw_list, stanza_id)
+                    for edge in edge_list:
+                        left_char = edge[0]
+                        right_char = edge[1]
+                        num_rhymes = edge[2]
+                        rhyme_id = edge[3]
+                        l_lhan = rw2lhan_dict[left_char]
+                        r_lhan = rw2lhan_dict[right_char]
+                        l_rhyme = get_rhyme_from_schuessler_late_han_syllable(l_lhan)
+                        r_rhyme = get_rhyme_from_schuessler_late_han_syllable(r_lhan)
+                        left_char = self.annotate_char_with_rhyme(left_char, l_rhyme)
+                        right_char = self.annotate_char_with_rhyme(right_char, r_rhyme)
+                        if l_rhyme != r_rhyme:
+                            print('Rhymes do NOT match! ' + left_char + ' : ' + right_char)
+                            print('\tSkipping!')
+                            continue
+                        s_edge_weight = s_received_net.get_edge_weight(left_char, right_char)
+                        pyvis_s_net.add_edge(left_char, right_char, value=s_edge_weight)
+                        self.add_edge(left_char, right_char, num_rhymes, rhyme_id, 'schuessler', data_type)
+                        #
+                        # For each rhyme word in each line
         self.print('\tDone.')
+        if self.is_schuessler_annotator_on():
+            s_rhyme_net = self.get_network_object('network', 'schuessler', 'combo')
+            nlist = s_rhyme_net.get_node_list()
+            elist = s_rhyme_net.get_unique_edge_list()
+            r2c = rhyme2color()
+            pyvis_sch_net = Network('1000px', '1000px', heading='Schuessler ' + data_type, font_color='white')
+            pyvis_sch_net.set_options(options)
+            #
+            # this currently does NOT work
+            #s_received_net = self.get_network_object('network', 'schuessler', 'received_shi')
+            for n in nlist:
+                # grab rhyme
+                try:
+                    rhyme = n.split('(')[1]
+                except IndexError as ie:
+                    x = 1
+                rhyme = rhyme.replace(')', '')
+                rw = n.split(' (')[0]
+                r2c.add_rhyme(rhyme)
+                # weight = n.get_node_weight()
+                color = r2c.given_rhyme_get_color(rhyme)
+                # the weight is added to 'value'
+                n_weight = s_received_net.get_node_weight(n)
+                pyvis_sch_net.add_node(n, label=n, title=rhyme, color=color, shape='circle', value=n_weight)
+            s_rhyme_net = self.get_network_object('network', 'schuessler', 'combo')
+            for e in elist:
+                edge_weight = s_rhyme_net.get_edge_weight(e[0], e[1])
+                pyvis_sch_net.add_edge(e[0], e[1], value=edge_weight)
+            pyvis_sch_net.show('schuessler_' + data_type + '.html')
+
+            # pyvis_sch_net.show('Schuessler_received_shi.html')
+        if self.is_naive_annotator_on():
+            pyvis_n_net.show('pre_com_det_' + data_type + '.html')
+        # pyvis_final
+        x = 1
+        n = 40
+        # received_net = self.get_network_object('network', 'naive', 'received_shi')
+        # most_common_zi = received_net.get_most_commonly_rhymed_n_characters(n)
+
+def given_rhyme_group_return_list_of_edges(rw_list, rhyme_id):
+    funct_name = 'given_rhyme_group_return_list_of_edges()'
+    num_rhymes = len(rw_list)
+    edge_list = []
+    for left_inc in range(0, num_rhymes, 1):
+        for right_inc in range(left_inc + 1, num_rhymes, 1):
+            edge_list.append((rw_list[left_inc], rw_list[right_inc], num_rhymes, rhyme_id))
+    return edge_list
+
 def test_visualize_infomap_output():
     funct_name = 'test_visualize_infomap_output()'
     filename = 'lu1983_infomap_output.txt'
@@ -2410,33 +3482,6 @@ def visualize_infomap_output(filename):
     for ll in line_list:
         print(ll)
 
-def is_unicode(text):
-    retval = False
-    if 'str' in str(type(text)):
-        retval = True
-    return retval
-
-def append_line_to_utf8_file(filename, content):
-    funct_name = 'append_line_to_utf8_file()'
-    output_ptr = safe_open_utf8_file_for_appending(filename)
-    output_ptr.write(content + '\n')
-    if output_ptr:
-        output_ptr.close()
-
-def if_not_unicode_make_it_unicode(my_str):
-    funct_name = 'if_not_unicode_make_it_unicode()'
-    if not is_unicode(my_str):
-        my_str = my_str.decode('utf8')
-    return my_str
-
-def safe_open_utf8_file_for_appending(filename):
-    filename = if_not_unicode_make_it_unicode(filename)
-    p, f = os.path.split(filename)
-    if p and not os.path.isdir(p):  # if the directory doesn't exist, create it
-        os.makedirs(p)
-    return codecs.open(filename, 'a', 'utf8')
-
-
 # 'saveas' must be a filename ending in .html
 def use_networkx_n_altair_visualization(nx_graph, saveas=''):
     funct_name = 'use_networkx_n_altair_visualization()'
@@ -2445,9 +3490,7 @@ def use_networkx_n_altair_visualization(nx_graph, saveas=''):
     pos = nx.spring_layout(nx_graph)
     # Add attributes to each node.
     for n in nx_graph.nodes():
-        #G.nodes[n]['weight'] = np.random.randn()
         nx_graph.nodes[n]['name'] = n
-        #G.nodes[n]['viable'] = np.random.choice(['yes', 'no'])
 
     viz = nxa.draw_networkx(G=nx_graph, pos=pos, node_label='name')# note: , with_labels=True is for networkx, not nx_altair
     viz = viz.properties(height = 700, width = 700)
@@ -2463,90 +3506,12 @@ def print_lu1983_dict():
         readin_lu_1983_data()
     for k in lu1983_dict:
         print(k + ': ' + lu1983_dict[k])
-    #if juan_num not in juan_num2data_dict:
-    #    juan_num2data_dict[juan_num] = {}
-    #if seq_num not in juan_num2data_dict[juan_num]:
-    #    juan_num2data_dict[juan_num][seq_num] = ''
-    #juan_num2data_dict[juan_num][seq_num] = pmsg
-
-#def get_schuessler_item_given_label(line, label, label_list):
-class sch_glyph2phonology:
-    def __init__(self):
-        self.glyph2data = get_schuessler_late_han_data()
-        #data = zh_ipa + delim + qy_ipa + delim + lh_ipa + delim + ocm_ipa
-        self.mandarin_pos = 0
-        self.qieyun_pos = 1
-        self.late_han_pos = 2
-        self.min_oc_pos = 3
-
-    def print_all_data(self):
-        for k in self.glyph2data:
-            print('glyph2data[' + k + '] = ' + '\n'.join(self.glyph2data[k]))
-
-    def print_all_mandarin(self):
-        for k in self.glyph2data:
-            print(k + ': ' + self.get_mandarin(k))
-
-    def print_all_qieyun(self):
-        for k in self.glyph2data:
-            print(k + ': ' + self.get_qieyun(k))
-
-    def print_all_late_han(self):
-        inc = 0
-        for k in self.glyph2data:
-            x = self.get_late_han(k)
-            late_han = self.get_late_han(k)
-            if late_han:
-                late_han = late_han.split(' ')
-            if len(late_han) >= 1:
-                print(k + ': ' + ' '.join(late_han))
-            if self.get_late_han(k).strip():
-                inc += 1
-        print(str(inc) + ' entries have LHan data.')
-
-    def print_all_ocm(self):
-        inc = 0
-        for k in self.glyph2data:
-            ocm = self.get_ocm(k)
-            print(k + ': ' + ocm)
-
-    def get_late_han(self, glyph):
-        retval = self.get_data_from_pos(glyph, self.late_han_pos)
-        retval = list(set(retval.split(' ')))
-        return ' '.join(retval)
-
-    def get_ocm(self, glyph):
-        return self.get_data_from_pos(glyph, self.min_oc_pos)
-
-    def get_qieyun(self, glyph):
-        return self.get_data_from_pos(glyph, self.qieyun_pos)
-
-    def get_mandarin(self, glyph):
-        return self.get_data_from_pos(glyph, self.mandarin_pos)
-        #retval = []
-        #try:
-        #    for line in self.glyph2data[glyph]:#.split('\t')[self.mandarin_pos]
-        #        retval.append(line.split('\t')[self.mandarin_pos])
-        #except:
-        #    x = 1
-        #return ' '.join(retval)
-
-    def get_data_from_pos(self, glyph, pos):
-        retval = []
-        #if glyph == '片':
-        #    x = 1
-        try:
-            for line in self.glyph2data[glyph]:
-                data = line.split('\t')[pos]
-                if data not in retval:
-                    if data.strip():
-                        retval.append(data)
-        except:
-            x = 1
-        return ' '.join(retval).strip()
 
 def remove_dupes(data):
-    data = data.split(' ')
+    try:
+        data = data.split(' ')
+    except AttributeError:
+        x = 1 # if this error happpens, then 'data' is a list
     if len(data) > 1:
         x = 1
     data = list(set(data))
@@ -2556,26 +3521,14 @@ def remove_dupes(data):
 #'donᴮ/ᶜ duɑnᴮ/ᶜᴬ'
 def handle_a_slash_c(line):
     return handle_x_slash_y(line, 'ᴬ', 'ᶜ')
+
 def handle_b_slash_c(line):
     return handle_x_slash_y(line,'ᴮ', 'ᶜ')
-    #if 0:
-    #    line = line.split(' ')
-    #    retval = ''
-        #if '(' in line:
-        #    x = 1
-    #    for e in line:
-    #        if 'ᴮ/ᶜ' in e:
-    #            base = e.replace('ᴮ/ᶜ', '')
-    #            retval += base + 'ᴮ ' + base + 'ᶜ '
-    #        else:
-    #            retval += e + ' '
-    #    return retval.strip()
 
 def handle_x_slash_y(line, x, y):
     line = line.split(' ')
     retval = ''
     for e in line:
-
         if x + '/' + y in e:
             base = e.replace(x + '/' + y, '')
             retval += base + x + ' ' + base + y + ' '
@@ -2603,219 +3556,24 @@ def handle_paren_x(line, x):
             retval += e + ''
     return retval.strip()
 
-
-def get_schuessler_late_han_data(is_verbose=False):
-    funct_name = 'get_schuessler_late_han_data()'
-    #input_file = os.path.join(get_schuesslerhanchinese_dir(), 'raw', 'SchuesslerTharsen.tsv')
-    input_file = os.path.join(get_hanproj_dir(), 'phonological_data', 'raw', 'SchuesslerTharsen.tsv')
-    if not os.path.isfile(input_file):
-        print(funct_name + ' ERROR: INVALID input file:')
-        print('\t' + input_file)
+def get_schuessler_late_han_addendum_data(is_verbose=False):
+    funct_name = 'get_schuessler_late_han_addendum_data()'
+    input_file = os.path.join(get_phonological_data_dir(), 'missing_schuessler_char_list3.txt')
+    if not if_file_exists(input_file, funct_name):
         return
     line_list = readlines_of_utf8_file(input_file)
-    if is_verbose:
-        print('LABELS:')
-        print('\t' + line_list[0])
-    label_list = line_list[0]
-    label_list = label_list.split('\t')
-    line_list = line_list[1:len(line_list)] # remove labels
-    if is_verbose:
-        print('FORMAT: ')
-        print('\t' + line_list[0])
-    format_list = line_list[0]
-    line_list = line_list[1:len(line_list)] # remove format
-    # ID=1298	wf_pinyin={	wf_graph={	wf_relationship={	pinyin_index=gǔ1	graph=古	QY_IPA=kuoᴮ	LH	LH_IPA=kɑᴮ	OCM	OCM_IPA=*kâɁ
-    num_labels = len(label_list)
-    delim = '\t'
     retval = {}
-    exceptions = ['箄 and other characters', '琥珀 < 虎魄', '姮娥 ~ 恆娥', '顥[Lü],昊', '艎 / 艕', '艕,艎', '嚅唲,儒兒',
-                  '娥 (in héng-é)姮娥', '梃,鋌', '於兔,於瑙', '阤,陊 (duò) (Mand. tuó), 陊 (Mand. duò)', '杝,扡', '射油']
-    except_dict = {'箄 and other characters':'箄', '琥珀 < 虎魄':'琥珀,虎魄', '姮娥 ~ 恆娥':'姮娥,恆娥', '顥[Lü],昊':'顥,昊',
-                   '艎 / 艕':'', '娥 (in héng-é)姮娥':'', '阤,陊 (duò) (Mand. tuó), 陊 (Mand. duò)':'阤,陊','射油':'油'}
-    #data = glyph + delim + zh_ipa + delim + qy_ipa + delim + lh_ipa + delim + ocm_ipa
-    #
-    # these line are exceptions in the data; just handle them directly hear and skip them in the normal processing
-    lines2add = {'慚':'cuō3' + delim + 'tsʰâ,dzâ' + delim + delim,
-                 '貸':'dài2'+ delim + delim + delim,
-                 '潏':'jué10' + delim + delim + delim,
-                 '蔚':'wèi11' + delim + delim + delim}
-    #
-    # LHan exceptions:
-    lhan_exceptions = {'痣':'tśəᶜ kiəᶜ', '躓':'ṭis', '質':'tśit', '蛭':'tet tśit ṭit', '紙':'tśiɑiɁ kiɑiɁ',
-                       '植':'dźik ḍəᶜ', '培':'bə bəuᴮ', '癠':'dzei dzeiᴮ dzeiᶜ', '讙':'xyɑn xion xuɑn', '檢':'kiɑmᴮ kiamᴮ',
-                       '仔':'tsiə tsiəᴮ', '洚':'goŋ gouŋ g/kɔŋᶜ', '殺':'ṣat sɛt', '謾':'mian mɑn mɑnᶜ man manᶜ',
-                       '院瑗':'wanᶜ wenᶜ', '抓':'tṣauᴮ tṣauᶜ', '綴':'ṭot ṭos ṭuas ṭuat', '翠':'tsʰus tsʰuis',
-                       '率':'ṣuis ṣuit luit', '潏':'kuet juit jut', '鳳':'puəmᶜ buŋᶜ mie me ŋe', '青':'tsieŋ tseŋ tsʰeŋ',
-                       '蒩':'tsiɑ tsɑ tsʰiɑ', '論':'luən lun luənᶜ', '芒':'muɑŋ mɑŋ huɑŋ', '麑':'ŋe mie me',
-                       '能':'nə nəŋ', '聳':'sioŋᴮ tsʰioŋᶜ tsʰoŋᶜ','竦':'sioŋᴮ tsʰioŋᶜ tsʰoŋᶜ', '醒':'seŋ seŋᴮ seŋᶜ',
-                       '蹂':'ńu ńuᴮ ńuᶜ', '來':'lə mɛk','繂':'luit', '繘':'kuit wit', '澗':'nuan nuanᶜ','汏':'dɑs',
-                       '鬌':'tuɑiᴮ toiᴮ tuɑᴮ','揭':'gɨat kʰias', '皎':'keiauᴮ keuᴮ', '皦':'keiauᴮ keuᴮ', '匱':'gwis',
-                       '餽':'gwih gwis', '饋':'gwih gwis', '潸':'ṣanᴮ ṣɛn ṣan', '焉':'Ɂɑn Ɂiɑn', '燕':'Ɂenᶜ Ɂenᴮ',
-                       '毒': 'douk douh', '剬': 'tuɑn tśuanᴮ duɑn don tśuan tśion', '差':'tṣʰɑi tṣʰɛ tṣʰai',
-                       '皇': 'guɑŋ Ɣuɑŋ', '煌': 'guɑŋ Ɣuɑŋ', '牛': 'ŋiu ŋu', '葚': 'dźimᴮ źimᴮ', '實': 'dźit źit',
-                       '饁': 'wɑp jɑp', '適':'tśek śek', '夫':'buɑ puɑ', '棧':'dẓanᴮ dẓɛnᶜ dẓɛnᴮ'}
-    ocm_exceptions = {'九':'*kuɁ kwəɁ', '啄':'*trôk *tôs *tôh *troh', '咮':'*tôks *tôs *tôh *troh', '凡':'*bom *bam',
-                      '飯':'*bans *bons *ban', '肺':'*phots *phats', '胐':'*phəiɁ *phə̂t *phuiɁ *phut',
-                      '補': '*mpaɁ *mpâɁ *pâɁ', '晨': '*m-dən *dən', '荒': '*hmâŋ *hmlaŋ *hmâŋ', '利': '*rih', '遐': '*gâ',
-                      '望': '*maŋᴬ', '磏': '*ram *riam', '鎌':'*ram *riam', '鋁':'*raɁ', '坻':'*dri'}
-
-    #data = zh_ipa.strip() + delim + qy_ipa.strip() + delim + lh_ipa.strip() + delim + ocm_ipa.strip()
-    left_outs2add = {'鵠':'hú gǔ' + delim + 'ɣuok kuok' + delim + 'gouk kouk' + delim + 'gûk kûk',
-                     '飾':'shì' + delim + 'śjək' + delim + 'śɨk' + delim + 'lhək',
-                     '葵':'kuí' + delim + 'gwi' + delim + 'gwi' + delim + 'gwi',
-                     '羹':'gēng' + delim + 'kɐŋ' + delim + 'kaŋ' + delim + 'krâŋ',
-                     '歇':'xiē' + delim + 'xjɐt' + delim + 'hɨɑt' + delim + 'hat',
-                     '葩':'pā' + delim + 'pʰa' + delim + 'pʰa' + delim + '',
-                     '桂':'guì' + delim + 'kiweiᶜ' + delim + 'kueᶜ' + delim + 'kwêh',
-                     '鴦':'yāng' + delim + 'ʔjaŋ' + delim + 'ʔɨɑŋ' + delim + 'ʔɑŋ',
-                     '絕':'jué' + delim + 'dzjwät' + delim + 'dzyat' + delim + 'dzot',
-                     '芝':'zhī' + delim + 'tśɨ' + delim + 'tśɨ tśə' + delim + 'tə',
-                     '兮':'xī' + delim + 'ɣiei' + delim + 'ɣei' + delim + 'gî',
-                     '大':'dà dài' + delim + 'dâiᶜ' + delim + 'dɑs dɑh' + delim + 'dâs',
-                     '返':'fǎn' + delim + 'pjwɐnᴮ' + delim + 'puɑnᴮ' + delim + 'panʔ',
-                     '晚': 'wǎn' + delim + 'mjwɐnᴮ' + delim + 'muɑnᴮ' + delim + 'manʔ',
-                     '憙':'xǐ' + delim + 'xjɨᴮ' + delim + 'hɨəᴮ hɨᴮ' + delim + 'həʔ',
-                     '俙':'xī' + delim + 'xjei' + delim + 'hɨi' + delim + 'həi'}
-    # '':'' + delim + '' + delim + '' + delim + ''
-    # upside-down a - ɐ
-    # funky i       - ɨ
-    # phat a        - ɑ
-    # umlauted a    - ä
-    # tone a        - ᴬ
-    # tone b        - ᴮ
-    # tone c        - ᶜ
-    # aspiration h  - ʰ
-    # ng            - ŋ
-    # glottal stop  - ʔ
-    # schwa         - ə
-
-    for k in left_outs2add:
-        retval[k] = []
-        retval[k].append(left_outs2add[k])
-    #, '抓':''}#棧: dẓanᴮ or dẓɛnᴮ/ᶜ; 仔: tsiə(ᴮ);院: wanᶜ/wenᶜ;瑗: wanᶜ/wenᶜ; 禜: waŋ(ᶜ)
-                                      #遺: wi wih wis?; 翳: Ɂei(h); 燕: Ɂenᶜ Ɂenᶜ ~ Ɂenᴮ; 剡: jamᴮ jamᴮ
-    # 炫: Ɣ(u)enᶜ; 休: x(ɨ)u; 星: seŋ / S tsʰeŋ dzieŋ; 信: sinᶜ  sinᶜ; 笑: siauᶜ / S tsʰiauᶜ
-    # 繘: kiut kuit ju(it -> LH	kiut (kuit),ju(i)t
-    # 爰: wɑn wɑn
-    #
-    # process normal data
-    #
-    # TO DO (2022-04-14):
-    #  - finish cleaning up Schuessler's Late Han data (starting with "S /":
-    #     笑: tsʰiauᶜ S / siauᶜ;
-    #     癬: tsʰiɑnᴮ sianᴮ S /
-    #     涎: lanᴮ janᶜ zian S)
-    #  - then: 望: muɑŋᴬ/ᶜ muɑŋ
-    #  - 覃: dəm  jamᴮ (double space)
-    #  - 說: śos śuɑs  śuat śot śos śuas (double space)
-    #  - 蹂: ńu()ᴮ ńu()ᶜ; 醒: seŋ()ᴮ seŋ()ᶜ
-    #  - 鉛: jyan / jon
-    for k in lines2add:
-        if k not in retval:
-            retval[k] = []
-        retval[k].append(lines2add[k])
-    ids2skip = ['553', '579', '2054', '3922']
-    for l in line_list:
-        l = l.split(delim)
-        len_l = len(l)
-        ID = l[label_list.index('ID')]
-        if ID in ids2skip:
-            continue
-        zh_ipa = l[label_list.index('pinyin_index')]
-        glyph = l[label_list.index('graph')]
-        if glyph == '○':
-            continue
-
-        if ',' in zh_ipa:
-            zh_ipa = zh_ipa.replace(',', ' ')
-            x = 1
-        if '-' in zh_ipa and len(glyph) > 1:
-            continue # this is a word with more than one syllable
-
+    for ll in line_list:
+        ll = ll.split('\t')
+        entry = ll[0]
+        lhan = ll[2]
+        if entry not in retval:
+            retval[entry] = []
+        if lhan.strip() and lhan not in retval[entry]:
+            retval[entry].append(lhan)
         if is_verbose:
-            print('ID=' + ID + ', glyph=' + glyph)
-        if len(glyph) > 1:
-            if glyph in except_dict: # these entries are handled above
-                glyph = except_dict[glyph]
-                if not glyph.strip():
-                    zh_ipa = ''
-                    continue
-        qy_ipa = l[label_list.index('QY_IPA')]
-        lh_ipa = l[label_list.index('LH_IPA')]
-        #if glyph == '繘' or '繂' in glyph:
-        #    x = 1
-        lh_ipa = cleanup_late_han_ipa(lh_ipa)
-        ocm_ipa = l[label_list.index('OCM_IPA')]
-        ocm_ipa = cleanup_ocm_ipa(ocm_ipa)
-        if ',' in glyph:
-            for g in glyph.split(','):
-                if g in lhan_exceptions:
-                    lh_ipa = lhan_exceptions[g]
-                if g in ocm_exceptions:
-                    ocm_ipa = ocm_exceptions[g]
-                if '  ' in lh_ipa:
-                    lh_ipa = lh_ipa.replace('  ',' ')
-                if g == '坐':
-                    x = 1
-                data = zh_ipa.strip() + delim + qy_ipa.strip() + delim + lh_ipa.strip() + delim + ocm_ipa.strip()
-                if g not in retval:
-                    retval[g] = []
-                if g == '片':
-                    y = retval[g]
-                    x = 1
-                if data not in retval[g]:
-                    if '  ' in data: # debug only
-                        x = 1# debug only
-                    retval[g].append(data)
-        else:
-            glyph = list(glyph)
-            for g in glyph:
-                if g in lhan_exceptions:
-                    lh_ipa = lhan_exceptions[g]
-                if g in ocm_exceptions:
-                    ocm_ipa = ocm_exceptions[g]
-
-                if '  ' in lh_ipa:
-                    lh_ipa = lh_ipa.replace('  ',' ')
-                if g == '坐':
-                    x = 1
-                data = zh_ipa.strip() + delim + qy_ipa.strip() + delim + lh_ipa.strip() + delim + ocm_ipa.strip()
-                if is_verbose:
-                    print('glyph=' + g)
-                if g not in retval:
-                    retval[g] = []
-                if g == '片':
-                    y = retval[g]
-                    x = 1 # '率' made it here, 4x
-                if data not in retval[g]:
-                    if '  ' in data: # debug
-                        x = 1 # debug
-                    retval[g].append(data)
-
-    if 0:#is_verbose:
-        print(str(len(retval)) + ' lines.')
-        total_cnt = 0
-        for k in retval:
-            if k == '率':
-                y = retval[k]
-                x = 1
-
-            total_cnt += len(retval[k])
-        print(str(total_cnt) + ' in total count.')
-    # correct exceptions
-    if '摳' in retval:
-        retval['摳'] = 'kʰo kʰuo'
-    if '揗' in retval:
-        retval['揗'] = 'źuinᴮ źuinᶜ'
-    if '燁' in retval:
-        retval['燁'] = 'wap jəp'
-    if '晨' in retval:
-        retval['晨'] = 'dźin źin'
-        #print(l)
-        #print('\tzh_ipa: ' + zh_ipa + ', glyph: ' + glyph + ', qy_ipa: ' + qy_ipa + ', lh_ipa: ' + lh_ipa + ', ocm_ipa: ' + ocm_ipa)
-
+            print(ll)
     return retval
-
 
 def test_schuessler_phonological_data():
     funct_name = 'test_schuessler_phonological_data()'
@@ -2825,112 +3583,6 @@ def test_schuessler_phonological_data():
     #schuessler.print_all_qieyun()
     #schuessler.print_all_late_han()
     schuessler.print_all_ocm()
-
-def cleanup_ocm_ipa(ocm):
-    if ' ~ ' in ocm:
-        ocm = ocm.replace(' ~ ', ' ')  # just treat each one as a possibility
-    if ' ?' in ocm:
-        ocm = ocm.replace(' ?','')
-    if '?' in ocm:
-        ocm = ocm.replace('?', '')
-    #if '(' not in ocm and ' or ' in ocm:
-    #    ocm = ocm.replace(' or ', ' ')
-    if ' (or ' in ocm:
-        ocm = ocm.replace(' (or ', ' ')
-        ocm = ocm.replace(')','')
-    if ' or ' in ocm:
-        ocm = ocm.replace(' or ', ' ')
-    if ' (etc.)' in ocm:
-        ocm = ocm.replace(' (etc.)','')
-    if ' < ' in ocm:
-        ocm = ocm.replace(' < ',' ')
-    if ' (< ' in ocm:
-        ocm = ocm.replace(' (< ', ' ')
-    if ' >) ' in ocm:
-        ocm = ocm.replace(' >) ', ' ')
-        ocm = ocm.replace('(','')
-    if ' > ' in ocm:
-        ocm = ocm.replace(' > ', ' ')
-    if ',' in ocm:
-        ocm = ocm.replace(',', ' ')
-    if '(prob. ' in ocm:
-        ocm = ocm.replace('(prob. ', '')
-        ocm = ocm.replace(')','')
-    if '(i.e. ' in ocm:
-        ocm = ocm.replace('(i.e. ', '')
-        ocm = ocm.replace(')', '')
-    if ' (= ' in ocm:
-        ocm = ocm.replace(' (= ',' ')
-        ocm = ocm.replace(')','')
-    if '瞑' in ocm:
-        x = 1
-    if ' (瞑)' in ocm:
-        ocm = ocm.replace(' (瞑)', '')
-        #handle_x_slash_y((Ɂ/h))
-    ocm = handle_short_parens(ocm)
-    return ocm
-
-def cleanup_late_han_ipa(lh_ipa):
-    if 'or' in lh_ipa:
-        if ' or ' in lh_ipa:
-            lh_ipa = lh_ipa.replace(' or ', ' ')
-        if 'or ' == lh_ipa[0:2+1]:
-            lh_ipa = lh_ipa[2+1:len(lh_ipa)]
-        if ' or' == lh_ipa[len(lh_ipa) - 3:len(lh_ipa)]:
-            lh_ipa = lh_ipa[0:len(lh_ipa) - 3]
-    if '?' in lh_ipa:
-        lh_ipa = lh_ipa.replace('?', '')
-    if ' ~ ' in lh_ipa:
-        lh_ipa = lh_ipa.replace(' ~ ', ' ')  # just treat each one as a possibility
-    if ',' in lh_ipa:
-        lh_ipa = lh_ipa.replace(',', ' ')
-    if ' < ' in lh_ipa:
-        lh_ipa = lh_ipa.replace(' < ', ' ')  # just treat each one as a possibility
-    if ' (> ' in lh_ipa:
-        lh_ipa = lh_ipa.replace(' (> ', ' ')
-        lh_ipa = lh_ipa.replace(')', '')
-        lh_ipa = lh_ipa.replace('  ', '')
-    if ' > ' in lh_ipa:
-        lh_ipa = lh_ipa.replace(' > ', ' ')  # just treat each one as a possibility
-    if '> ' in lh_ipa:
-        if '> ' == lh_ipa[0:2]:
-            lh_ipa = lh_ipa[2:len(lh_ipa)]
-    if ' ?' in lh_ipa:
-        lh_ipa = lh_ipa.replace(' ?', '')
-    if ' (' in lh_ipa:
-        lh_ipa = lh_ipa.replace(' (', ' ')
-        lh_ipa = lh_ipa.replace(')', '')
-    if ' MHan' in lh_ipa:
-        lh_ipa = lh_ipa.replace(' MHan', '')
-    if '/S ' in lh_ipa:
-        lh_ipa = lh_ipa.replace('/S ', ' ')
-        lh_ipa = lh_ipa.replace('  ', ' ')
-    if 'S ' in lh_ipa:
-        lh_ipa = lh_ipa.replace('S ', ' ')
-        lh_ipa = lh_ipa.replace('  ', ' ')
-    lh_ipa = remove_dupes(lh_ipa)
-    # piaŋᴮ/ᶜ
-    if 'ᴮ/ᶜ' in lh_ipa:
-        lh_ipa = handle_b_slash_c(lh_ipa)
-    if 'ᴬ/ᶜ' in lh_ipa:
-        lh_ipa = handle_a_slash_c(lh_ipa)
-    if '(ᶜ)' in lh_ipa:  # need one for (ᴮ) as well
-        lh_ipa = handle_paren_c(lh_ipa)
-    if '(ᴮ)' in lh_ipa:
-        lh_ipa = handle_paren_b(lh_ipa)
-    if '(Ɂ)' in lh_ipa:
-        lh_ipa = handle_paren_x(lh_ipa, '(Ɂ)')
-    if '(h)' in lh_ipa:
-        lh_ipa = handle_paren_x(lh_ipa, '(h)')
-    if '/' in lh_ipa:
-        x = 1
-        lh_ipa = lh_ipa.replace(' / ', ' ')
-        lh_ipa = lh_ipa.replace('  ', ' ')
-        if '/ ' == lh_ipa[0:2]:
-            lh_ipa = lh_ipa[2:len(lh_ipa)]
-        if '/ ' == lh_ipa[len(lh_ipa) - 2:len(lh_ipa)] or ' /' == lh_ipa[len(lh_ipa) - 2:len(lh_ipa)]:
-            lh_ipa = lh_ipa[0:len(lh_ipa) - 2]
-    return lh_ipa
 
 def test_distance_between_tags():
     funct_name = 'test_distance_between_tags()'
@@ -3022,96 +3674,14 @@ class kmss_mirror_data:
     def print(self):
         print(self.get_print_str())
 
-# IMPORTANT: This is using a naive assumption about the rhyming patterns
-# ASSUMPTIONS:
-#   - (if no 「，」) rhyme words appear before 「。」
-#   - (if both 「，」、「。」) rhyme words appear before 「，」、「。」
-def get_rhyme_words_for_kmss2015_mirror_inscription(unique_id, inscription, use_unpunctuated=False):
-    funct_name = 'get_rhyme_words_for_kmss2015_mirror_inscription()'
-    punct_list = ['。', '，']
-    retval = []
-    if use_unpunctuated and '，' not in inscription and '。' not in inscription: # handle unpunctuated case
-        return retval
-    elif '，' in inscription: # handle ...，...，...。 case
-        if inscription.count('。') > 1:
-            print(funct_name + ' UNUSUAL situation. ' + unique_id + ' has both 「，」、「。」 AND ')
-            print('\tmore than one 「。」')
-            return retval
-        inscription = inscription.replace('。', '')
-        inscription = inscription.split('，')
-        for i in inscription:
-            last_char = grab_last_character_in_line(i)
-            if '・' in last_char or '…' in last_char or '□' in last_char:
-                continue
-            if last_char and last_char not in retval:
-                retval.append(last_char)
-    elif '。' in inscription: # handle ...。...。...。 case
-        inscription = inscription.split('。')
-        for i in inscription:
-            last_char = grab_last_character_in_line(i)
-            if '・' in last_char or '…' in last_char or '□' in last_char:
-                continue
-            if last_char and last_char not in retval:
-                retval.append(last_char)
-    if len(retval) == 1:
-        retval = [] # can't have just one rhyme word
-    if retval and retval[len(retval)-1] == '':
-        retval = retval[0:len(retval)-1]
-    return retval
 
-
-def process_kyomeishusei2015_han_mirror_data():
-    funct_name = 'process_kyomeishusei2015_han_mirror_data()'
-    id2inscription = readin_kyomeishusei2015_han_mirror_data()
-    no_punct = []
-    w_punct = []
-    im = Infomap("--two-level --directed")
-    rhyme_net = rnetwork()
-    for id in id2inscription:
-        #print(id + ': ' + '\n'.join(id2inscription[id]))
-        #if len(id2inscription[id]) != 1:
-        #    print('len: ' + str(len(id2inscription[id])))
-        #    if 0 and len(id2inscription[id]) > 2 and len(id2inscription[id]) < 502:
-        #        print('*'*100)
-        for l in id2inscription[id]:
-            rw_words = get_rhyme_words_for_kmss2015_mirror_inscription(id, l, use_unpunctuated=False)
-            rhymes = ','.join(rw_words)
-            rhymes = rhymes[0:len(rhymes)-1]
-            print(id + ': ' + '\n'.join(id2inscription[id]) + ', RHYME WORDS: ' + rhymes)
-            if rw_words: # if there are any rhyme words...
-                #
-                # add Nodes
-                for rhyme_word in rw_words:
-                    rhyme_net.add_node(rhyme_word, '1', '\n'.join(id2inscription[id]))
-                    weight = rhyme_net.get_node_weight(rhyme_word)
-                #
-                # add Edges
-                for left_inc in range(0, len(rw_words), 1):
-                    msg = '-'*40 + '\n'
-                    for right_inc in range(left_inc + 1, len(rw_words), 1):
-                        rhyme_num = id
-                        msg += id + ': '
-                        msg += rw_words[left_inc] + ':' + rw_words[right_inc] + ', num_rhymes_same_type = '
-                        msg += str(len(rw_words)) + ', poem_stanza_num = ' + rhyme_num
-                        #if print_debug_msg:
-                        #print(msg) # debug only
-                        msg = ''
-                        rhyme_net.add_edge(rw_words[left_inc], rw_words[right_inc], len(rw_words), rhyme_num)
-                        #im.add_link(rw_list[left_inc], rw_list[right_inc])
-                        edge_weight = rhyme_net.get_edge_weight(rw_words[left_inc], rw_words[right_inc])
-    nodes_n_edges = rhyme_net.print_all_nodes_n_edges(is_verbose=True)
-
-#    rhyme_net.get_infomap_linked_list_of_rhyme_network()
-
-#◆〔
 def edit_kyomeishusei2015_han_mirror_data():
     funct_name = 'edit_kyomeishusei2015_han_mirror_data()'
-    base_dir = os.path.join(get_mirrors_dir(), 'raw', 'txt')
+    filename_storage = filename_depot()
+    mirrors_dir = filename_storage.get_mirrors_dir()
+    base_dir = os.path.join(mirrors_dir, 'raw', 'txt')
     src = os.path.join(base_dir, 'kyomeishusei2015_03.txt')
     dst = os.path.join(base_dir, 'kyomeishusei2015_03.old.txt')
-    #if not os.path.isfile(src):
-    #    print(funct_name + ' ERROR: Invalid file: ' + src)
-    #    return []
 
     if not os.path.isfile(dst):
         os.rename(src, dst)
@@ -3122,12 +3692,19 @@ def edit_kyomeishusei2015_han_mirror_data():
         if '◆〔' in ll:
             ll = ll.replace('◆〔', '◆\n〔')
         append_line_to_utf8_file(output_file, ll)
-    #append_line_to_utf8_file()
 
+# Known errors in the raw mirror data:
+# 00192: there's an extra 、 in 「長保二親、。」
+# 00485: an extra ＊ in 「上辟彔＊。」
+# NOTE: this function should actually be called parse_kyomeishusei2015_han_mirror_data()
 def readin_kyomeishusei2015_han_mirror_data():
     funct_name = 'readin_kyomeishusei2015_han_mirror_data()'
-    base_dir = os.path.join(get_mirrors_dir(), 'raw', 'txt')
-    output_file = os.path.join(get_mirrors_dir(), 'parsed_kyomeishusei2015_03.txt')
+    known_errors = ['◎華氏作竟冝矦王。家當大富樂未央。子孫備具居前行。長保二親、。辟邪含和除凶。所未得。仙人王僑赤松子。食兮。']
+    filename_storage = filename_depot()
+    mirrors_dir = filename_storage.get_mirrors_dir()
+
+    base_dir = os.path.join(mirrors_dir, 'raw', 'txt')
+    output_file = os.path.join(mirrors_dir, 'parsed_kyomeishusei2015_03.txt')
     if os.path.isfile(output_file):
         os.remove(output_file)
     # note: the data file is 03
@@ -3150,25 +3727,18 @@ def readin_kyomeishusei2015_han_mirror_data():
     for ll in line_list:
         if ll.strip().isdigit():
             continue # ignore page numbers
-        #print(ll)
         ll = ll.strip()
         if start_tag in ll:
             start_looking = True
         if start_looking:
-           #x = '《漢三國西晉鏡銘集成 '
             if '《漢三國西晉鏡銘集成 ' in ll:
                 ll = ll.split('》')
                 orig_id = ll[0] + '》'
-                unique_id = ll[0].replace('《漢三國西晉鏡銘集成 ', 'kyomeishusei2015_')
-                if '02065' in unique_id:
-                    x = 1
+                unique_id = ll[0].replace('《漢三國西晉鏡銘集成 ', 'kyomeishusei2015.')
                 data_source = '◆' + ll[1].replace('◆', '').strip() + '◆'
-                x = 1
-                #print('unique_id = \'' + unique_id + '\'')
-                #print('data source = \'' + ll[1] + '\'' )
             elif '《Ⅱ漢三國西晉鏡銘集成 ' in ll:
                 ll = ll.split('》')
-                unique_id = ll[0].replace('《Ⅱ漢三國西晉鏡銘集成 ', 'kyomeishusei2015_')
+                unique_id = ll[0].replace('《Ⅱ漢三國西晉鏡銘集成 ', 'kyomeishusei2015.')
             elif ll and '〔' == ll[0]:
                 inscription_name = ll.split('〕[')[0] + '〕'
                 if '對置式神獸鏡' in inscription_name:
@@ -3181,11 +3751,8 @@ def readin_kyomeishusei2015_han_mirror_data():
                     #print(unique_id + ' has some irregularities. Skipping.')
                     #continue
                     x = 1
-                #print('inscrption name = ' + inscription_name + ', name in source = ' + name_in_source)
             elif ll and '◎' in ll:
                 orig_ll = ll
-                if '06133' in unique_id:
-                    x = 1
                 try:
                     inscription = ll.split('◎')[1].strip()
                     inscription = inscription.split('（')  # get rid of commentary like （註）異體字銘帶 鏡Ⅱ式では「精」につくり，
@@ -3197,11 +3764,26 @@ def readin_kyomeishusei2015_han_mirror_data():
                 except IndexError as ie:
                     x = 1
                 inscription = remove_num_from_end_of_str_if_there_is_one(inscription)
+                if any_kana_in_string(inscription):
+                    continue
+
+                #
+                # Remove unusual characters (most of these are due to the mirror data)
+                # Need to write a function that removes stuff between different types of parens
+                character_oddities = ['「', '」', '[', ']', '(榜題)', '＜', '>', '【缺】', '【下缺】','【不明】', '【魚文】',
+                                      ' e ', ' e', 'Ⅱ', '〔不明）', '〔延年益壽〕', '(？)', '［後漢鏡銘集釋七三四〕',
+                                      '［後漢鏡銘集釋六〇九〕', '〔陳介祺藏古拓本選編	銅鏡卷 094〕', '〔方格 4 字×4 方格。〕']
+                if any(c in inscription for c in character_oddities):
+                    for oddity in character_oddities:
+                        inscription = inscription.replace(oddity, '')
+
                 if unique_id not in id2inscription:
-                    id2inscription[unique_id] = []
-                id2inscription[unique_id].append(inscription)
-                if len(id2inscription[unique_id]) > 1:
-                    x = 1
+                    id2inscription[unique_id] = ''
+
+                id2inscription[unique_id] = inscription
+
+                #if len(id2inscription[unique_id]) > 1:
+                #    x = 1
                 line_out = unique_id + delim + orig_id + delim + inscription_name + delim + name_in_source + delim
                 line_out += data_source + delim + physical_info + delim + inscription + delim + commentary
                 append_line_to_utf8_file(output_file, line_out)
@@ -3212,11 +3794,17 @@ def readin_kyomeishusei2015_han_mirror_data():
                 name_in_source = ''
                 physical_info = ''
                 inscription = ''
-                print('line_out=' + line_out)
-                #print('inscription = ' + inscription)
                 if 0 and inscription.count('。') == 5:
                     print(unique_id + ' (' + str(inscription.count('。')) + ')' + add_late_han_before_each_period(inscription))
     return id2inscription
+
+def any_kana_in_string(line):
+    retval = False
+    for l in line:
+        if is_kana_letter(l):
+            retval = True
+            break
+    return retval
 
 def add_late_han_before_each_period(line):
     if '。' not in line:
@@ -3238,7 +3826,6 @@ def add_late_han_before_each_period(line):
         retval += s + '(' + late_han + ')。'
     return retval
 
-#get_schuessler_late_han_for_glyph(glyph)
 def remove_num_from_end_of_str_if_there_is_one(line):
     if not line.strip():
         return line
@@ -3265,16 +3852,10 @@ zh2ara_dict = {'〇':0, '一':1, '二':2, '三':3, '四':4, '五':5, '六':6, '�
 def convert_zh_num2ara_num(zh_num, num_digits='03'):
     funct_name = 'convert_zh_num2ara_num'
     retval = ''
-    #print('input = ' + zh_num)
-    #for inc in range(len(zh_num)-1, -1, -1):
     for inc in range(0, len(zh_num), 1):
         #print(str(inc) + ' : ' + zh_num[inc])
         retval += str(zh2ara_dict[zh_num[inc]])
-    #retval = int(retval)
     retval = f"{int(retval):{num_digits}}"
-    #print(retval)
-    #f"{num_poems:03}"
-    #print(retval)
     return retval
 
 class single_stele:
@@ -3298,6 +3879,9 @@ class single_stele:
         self.delim = '\t'
         self.poem_content = []
 
+    def get_poem_id(self):
+        return self.unique_id
+
     def add_poem_content(self, line):
         self.poem_content.append(line)
 
@@ -3316,6 +3900,12 @@ class single_stele:
     def get_poem_content(self):
         return self.poem_content[:]
 
+    def get_poem_content_as_str(self):
+        joiner = ' '
+        if '。' in ''.join(self.poem_content):
+            joiner = '。'
+        return joiner.join(self.poem_content)
+
     def remove_last_line_of_poem_if_blank(self):
         while not self.poem_content[len(self.poem_content)-1].strip():
             self.poem_content.pop()
@@ -3324,7 +3914,7 @@ class stelae_data:
     def __init__(self):
         self.uniq2data_dict = {}
         self.n_rhyme_words = []
-        self.rhyme_net = rnetwork()
+        self.rhyme_net = rnetwork('stelae_data::rhyme_net')
 
     def get_uniq2data_dict(self):
         return self.uniq2data_dict
@@ -3360,24 +3950,12 @@ class stelae_data:
         for s_id in self.uniq2data_dict:
             print(self.get_display_str_for_single_stele(s_id))
 
-    def output_naive_annotation(self):
-        funct_name = 'output_naive_annotation()'
-        output_file = get_mao_2008_stelae_data_naive_annotator_output_file()
-        for s_id in self.uniq2data_dict:
-            poem = self.uniq2data_dict[s_id].get_poem_content()
-
-
     # rhyme assumption:
     # - all words before a 。 rhyme
     def naively_get_rhyme_words(self):
         funct_name = 'naively_get_rhyme_words()'
         for s_id in self.uniq2data_dict:
             poem = self.uniq2data_dict[s_id].get_poem_content()
-            #print(s_id + '\t' + '\n'.join(poem))
-            inc = 0
-            #for p in poem:
-            #    inc += 1
-            #    print(s_id + ' (' + str(inc) + ') ' + p)
             rw_words = get_rhyme_words_from_stele_inscription(s_id, poem)
             if rw_words: # if there are any rhyme words...
                 #
@@ -3394,16 +3972,9 @@ class stelae_data:
                         msg += s_id + ': '
                         msg += rw_words[left_inc] + ':' + rw_words[right_inc] + ', num_rhymes_same_type = '
                         msg += str(len(rw_words)) + ', poem_stanza_num = ' + rhyme_num
-                        #if print_debug_msg:
-                        #print(msg) # debug only
                         msg = ''
                         self.rhyme_net.add_edge(rw_words[left_inc], rw_words[right_inc], len(rw_words), rhyme_num)
-                        #im.add_link(rw_list[left_inc], rw_list[right_inc])
                         edge_weight = self.rhyme_net.get_edge_weight(rw_words[left_inc], rw_words[right_inc])
-        #self.rhyme_net.print_all_nodes_n_edges(True)
-            # add Nodes
-            #self.rhyme_net
-            # add Edges
 
 # this is based on the naive assumption that each line rhymes (i.e., last word before 。)
 def get_rhyme_words_from_stele_inscription(unique_id, line_list, use_unpunctuated=False):
@@ -3444,12 +4015,13 @@ def get_rhyme_words_from_stele_inscription(unique_id, line_list, use_unpunctuate
 def get_numbered_rhyme_words_from_stele_inscription(unique_id, line_list, use_unpunctuated=False):
     funct_name = 'get_numbered_rhyme_words_from_stele_inscription()'
     punct_list = ['。', '，']
+    is_verbose = False
     retval = {}
     rw_cnt = 0
     msg = ''
     line_cnt = -1
     for line in line_list: # this line_list represents an entire inscription
-        msg = 'For line: \'' + line + '\', the rhyme is'
+        msg = 'For line: \'' + line + '\', the rhymes are \n'
         last_char = ''
         char_pos = ''
         line_cnt += 1
@@ -3459,45 +4031,21 @@ def get_numbered_rhyme_words_from_stele_inscription(unique_id, line_list, use_un
             line = line.replace('；', '。') # treat ; just like 。
         if use_unpunctuated and '，' not in line and '。' not in line: # handle unpunctuated case
             return retval
-        elif 0 and '，' in line: # handle ...，...，...。 case
-            if line.count('。') > 1:
-                print(funct_name + ' UNUSUAL situation. ' + unique_id + ' has both 「，」、「。」 AND ')
-                print('\tmore than one 「。」')
-                return retval
-            line = line.replace('。', '')
-            line = line.split('，')
-            for i in line:
-                last_char, char_pos = grab_last_character_in_line(i)
-                if '・' in last_char or '…' in last_char or '□' in last_char:
-                    continue
-                if last_char.strip() and last_char not in retval:
-                    if line_cnt not in retval:
-                        retval[line_cnt] = {}
-                    if rw_cnt not in retval[line_cnt]:
-                        retval[line_cnt][rw_cnt] = []
-                    retval[line_cnt][rw_cnt].append((last_char, char_pos, i))
-                    #retval[rw_cnt] = (last_char, char_pos)
-
         elif '。' in line: # handle ...。...。...。 case
-#            if line.count('。') == 1 and line[len(line)-1] == '。':
-#                line = line.split('。')
-#                line.pop()  # get rid of '' artifact
-#            else:
             line = line.split('。')
             line.pop()  # get rid of '' artifact
-#                x = 1
-            for i in line:
-                if not i.strip():
+            for sub_line in line: # for each section that ends with '。'
+                if not sub_line.strip():
                     if line_cnt not in retval:
                         retval[line_cnt] = {}
                     if rw_cnt not in retval[line_cnt]:
                         retval[line_cnt][rw_cnt] = []
-                    retval[line_cnt][rw_cnt].append(('', -1, i))
-                    #retval[rw_cnt] = ('',-1)
+                    retval[line_cnt][rw_cnt].append(('', -1, sub_line))
                     rw_cnt += 1
+                    msg += '\t' + sub_line + '( No rhyme )\n'
                     continue
                 try:
-                    last_char, char_pos = grab_last_character_in_line(i)
+                    last_char, char_pos = grab_last_character_in_line(sub_line)
                 except ValueError as ve:
                     x = 1
                 if '・' in last_char or '…' in last_char or '□' in last_char:
@@ -3505,27 +4053,25 @@ def get_numbered_rhyme_words_from_stele_inscription(unique_id, line_list, use_un
                         retval[line_cnt] = {}
                     if rw_cnt not in retval[line_cnt]:
                         retval[line_cnt][rw_cnt] = []
-                    retval[line_cnt][rw_cnt].append(('', -1, i))
-                    #retval[rw_cnt] = ('',-1)
+                    retval[line_cnt][rw_cnt].append(('', -1, sub_line))
                     rw_cnt += 1
                     last_char = ''
                     char_pos = ''
+                    msg += '\t' + sub_line + '( No rhyme )\n'
                     continue
                 if last_char.strip() and last_char not in retval:
                     if line_cnt not in retval:
                         retval[line_cnt] = {}
                     if rw_cnt not in retval[line_cnt]:
                         retval[line_cnt][rw_cnt] = []
-                    retval[line_cnt][rw_cnt].append((last_char, char_pos, i))
-                    #retval[rw_cnt] = (last_char, char_pos)
+                    retval[line_cnt][rw_cnt].append((last_char, char_pos, sub_line))
                     rw_cnt += 1
-                    #retval.append(last_char)
-        msg += ' (' + last_char + ', ' + str(char_pos) + ')'
-        print(msg)
+                    msg += '\t' + sub_line + ' (' + last_char + ', ' + str(char_pos) + ')\n'
+        if is_verbose:
+            print(msg)
     if len(retval) == 1:
         try:
             if len(retval[0]) == 1:
-                x = 1
                 retval = {} # can't have just one rhyme word
         except:
             x = 1
@@ -3534,59 +4080,78 @@ def get_numbered_rhyme_words_from_stele_inscription(unique_id, line_list, use_un
 def process_mao_2008_stelae_data(is_verbose=False):
     funct_name = 'process_mao_2008_stelae_data()'
     # s_data is a stelae_data object
-    s_data = readin_mao_2008_stelae_data(is_verbose)
+    s_data = parse_mao_2008_stelae_data(is_verbose)
     s_data.naively_get_rhyme_words()
     s_data.output_naive_annotation()
 
-def get_mao_2008_stelae_data_input_file1():
-    base_dir = os.path.join(get_stelae_dir(), 'raw', 'txt')
-    return os.path.join(base_dir, '毛遠明 《漢魏六朝碑刻校注》第一冊.txt')
-
-def get_mao_2008_stelae_data_input_file2():
-    base_dir = os.path.join(get_stelae_dir(), 'raw', 'txt')
-    return os.path.join(base_dir, '毛遠明 《漢魏六朝碑刻校注》第二冊.txt')
-
-def get_mao_2008_stelae_data_naive_annotator_output_file():
-    return os.path.join(get_stelae_dir(),'毛遠明 《漢魏六朝碑刻校注》-naive-annotator.txt')
-
+def readin_parsed_mao_2008_stelae_data():
+    funct_name = 'readin_parsed_mao_2008_stelae_data()'
+    filename_storage = filename_depot()
+    input_file = filename_storage.get_parsed_mao_2008_stelae_data_file()
+    retval = {}
+    if not if_file_exists(input_file, funct_name):
+        message2user(funct_name + ' ERROR: Input file does NOT exist: ' + input_file)
+        return []
+    data = readlines_of_utf8_file(input_file)
+    labels = data[0]
+    data = data[2:len(data)] # remove labels and comment
+    poem_pos = 5
+    id_pos = 0
+    for d in data:
+        d = d.split('\t')
+        poem_id = d[id_pos]
+        poem = d[poem_pos].replace(' backslash_n ', '\n')
+        if poem_id not in retval:
+            retval[poem_id] = ''
+        retval[poem_id] = poem
+    return retval
 #
 # Rhyme assumption for the stelae data:
 # each line rhymes
-def readin_mao_2008_stelae_data(is_verbose=False):
-    funct_name = 'readin_mao_2008_stelae_data()'
+def parse_mao_2008_stelae_data(use_test_data=False, is_verbose=False):
+    funct_name = 'parse_mao_2008_stelae_data()'
     labels = ['Soas-Unique-ID', 'Stele-Name', 'Chinese-Date', 'Western-Year', 'Page-#', 'Poem']
-
-    base_dir = os.path.join(get_stelae_dir(), 'raw', 'txt')
-    #input_file1 = os.path.join(base_dir, '毛遠明 《漢魏六朝碑刻校注》第一冊.txt')
-    #input_file2 = os.path.join(base_dir, '毛遠明 《漢魏六朝碑刻校注》第二冊.txt')
-    input_file1 = get_mao_2008_stelae_data_input_file1()
-    input_file2 = get_mao_2008_stelae_data_input_file2()
     base_num_list = ['〇', '一', '二', '三', '四', '五', '六', '七', '八', '九']
-    if not os.path.isfile(input_file1):
-        print(funct_name + ' ERROR: Invalid file: ' + input_file1)
-        return []
-    if not os.path.isfile(input_file2):
-        print(funct_name + ' ERROR: Invalid file: ' + input_file2)
-        return []
-    output_file = os.path.join(get_stelae_dir(), 'parsed_毛遠明 《漢魏六朝碑刻校注》.txt')
+    filename_storage = filename_depot()
+
+    if not use_test_data:
+        input_file1 = filename_storage.get_mao_2008_stelae_data_input_file1()
+        input_file2 = filename_storage.get_mao_2008_stelae_data_input_file2()
+
+        if not os.path.isfile(input_file1):
+            print(funct_name + ' ERROR: Invalid file: ' + input_file1)
+            return []
+        if not os.path.isfile(input_file2):
+            print(funct_name + ' ERROR: Invalid file: ' + input_file2)
+            return []
+        output_file = os.path.join(filename_storage.get_stelae_dir(), 'parsed_毛遠明 《漢魏六朝碑刻校注》.txt')
+    else: # for TESTING
+        output_file = os.path.join(filename_storage.get_stelae_dir(), 'testing_parsed_毛遠明 《漢魏六朝碑刻校注》.txt')
+        input_file = os.path.join(filename_storage.get_stelae_dir(), 'test_data.txt')
+
     if os.path.isfile(output_file):
         os.remove(output_file)
     append_line_to_utf8_file(output_file, '\t'.join(labels))
     append_line_to_utf8_file(output_file, '# IMPORTANT: Convert \' backslash_n \' to \'\\n\' or \'\\r\\n\' depending on your system.' )
-    line_list1 = readlines_of_utf8_file(input_file1)
-    line_list2 = readlines_of_utf8_file(input_file2)
-    line_list = line_list1 + line_list2
+    if not use_test_data:
+        line_list1 = readlines_of_utf8_file(input_file1)
+        line_list2 = readlines_of_utf8_file(input_file2)
+        line_list = line_list1 + line_list2
+    else: # For Testing
+        line_list = readlines_of_utf8_file(input_file)
     mou_unique = ''
     delim = '\t'
     start_new_poem = False
     poem_content = []
-    #last_line = line_list[len(line_list)-1]
     pos = -1
     line_list_len = len(line_list)
-    #stele_data = single_stele()
     stele_dict = stelae_data()
     stop_reading_tag = '三国·魏'
+
+    comment_indicator = '#'
     for ll in line_list:
+        if ll.strip() and ll.strip()[0] == comment_indicator:
+            continue # skip over comments
         pos += 1
         if stop_reading_tag in ll:
             break
@@ -3601,7 +4166,6 @@ def readin_mao_2008_stelae_data(is_verbose=False):
                             print(l)
                 if mou_unique:
                     stele_dict.remove_last_poem_line_if_blank(mou_unique)
-                    #print('')
                 start_new_poem = True
                 poem_content = []
                 zh_num = ll[0].strip()
@@ -3612,7 +4176,6 @@ def readin_mao_2008_stelae_data(is_verbose=False):
                         page_num = date_data[2].lower()
                     except IndexError as ie:
                         page_num = ''
-                        x = 1
                     try:
                         date_data = date_data[1]
                     except IndexError as ie:
@@ -3629,22 +4192,16 @@ def readin_mao_2008_stelae_data(is_verbose=False):
                         date_data = right_side_data[1]
                     except:
                         date_data = ''
-                        #continue
                     if '（' in date_data:
                         date_data = date_data.split('（')
                         zh_date_year = date_data[0]
                         western_year = date_data[1].split('）')[0]
                         zh_date_month = date_data[1].split('）')[1]
                 ara_num = convert_zh_num2ara_num(zh_num) # arabic number
-                if ara_num == '142':
-                    x = 1
-                #print(zh_num + ':' + ara_num)
                 mou_unique = 'Mou2008.' + ara_num
-                #print(mou_unique)
                 msg = mou_unique + delim + zh_num + '：' + stele_name + '，' + zh_date_year + '（' + western_year
                 msg += '）' + zh_date_month
                 stele_dict.add_stele(mou_unique, stele_name, zh_date_year + zh_date_month, western_year, page_num)
-                #stele_data.add_entry(mou_unique, stele_name, zh_date_year + zh_date_month, western_year, page_num)
                 if page_num:
                     msg += '，' + page_num
                 if is_verbose:
@@ -3653,168 +4210,27 @@ def readin_mao_2008_stelae_data(is_verbose=False):
             else:
                 poem_content.append('X'.join(ll))
                 stele_dict.add_poem_content(mou_unique,'：'.join(ll))
-                #stele_data.add_poem_content('：'.join(ll))
         else:
             if ll:
                 poem_content.append(ll)
-                #stele_data.add_poem_content(ll)
                 stele_dict.add_poem_content(mou_unique,ll)
             else:
                 if ll == '':
                     if poem_content and poem_content[len(poem_content)-1] != '': # don't add two empty lines in a row
                         poem_content.append(ll)
-                        #stele_data.add_poem_content(ll)
                         stele_dict.add_poem_content(mou_unique, ll)
     # print out last poem
     for l in poem_content:
         if is_verbose:
             print(l)
-        #stele_data.add_poem_content(l)
         if stop_reading_tag not in ll:
             stele_dict.add_poem_content(mou_unique, ll)
-                #print(ll[0])
     uniq2data_dict = stele_dict.get_uniq2data_dict()
     for k in uniq2data_dict:
         output_msg = stele_dict.get_output_str_for_parsed_data_file_for_single_stele(k)
         append_line_to_utf8_file(output_file, output_msg)
         print(output_msg)
     return stele_dict
-    #stele_dict.print_all_stelae()
-
-def naively_annotate_mao_2008_stelae_data(is_verbose=False):
-    funct_name = 'naively_annotate_mao_2008_stelae_data()'
-    labels = ['Soas-Unique-ID', 'Stele-Name', 'Chinese-Date', 'Western-Year', 'Page-#', 'Poem']
-
-    base_dir = os.path.join(get_stelae_dir(), 'raw', 'txt')
-    #input_file1 = os.path.join(base_dir, '毛遠明 《漢魏六朝碑刻校注》第一冊.txt')
-    #input_file2 = os.path.join(base_dir, '毛遠明 《漢魏六朝碑刻校注》第二冊.txt')
-    input_file1 = get_mao_2008_stelae_data_input_file1()
-    input_file2 = get_mao_2008_stelae_data_input_file2()
-    base_num_list = ['〇', '一', '二', '三', '四', '五', '六', '七', '八', '九']
-    if not os.path.isfile(input_file1):
-        print(funct_name + ' ERROR: Invalid file: ' + input_file1)
-        return []
-    if not os.path.isfile(input_file2):
-        print(funct_name + ' ERROR: Invalid file: ' + input_file2)
-        return []
-    output_file = os.path.join(get_stelae_dir(), 'naively_annotated_毛遠明 《漢魏六朝碑刻校注》.txt')
-    if os.path.isfile(output_file):
-        os.remove(output_file)
-    #append_line_to_utf8_file(output_file, '\t'.join(labels))
-    # append_line_to_utf8_file(output_file, '# IMPORTANT: Convert \' backslash_n \' to \'\\n\' or \'\\r\\n\' depending on your system.' )
-    line_list1 = readlines_of_utf8_file(input_file1)
-    line_list2 = readlines_of_utf8_file(input_file2)
-    line_list = line_list1 + line_list2
-    mou_unique = ''
-    delim = '\t'
-    start_new_poem = False
-    poem_content = []
-    #last_line = line_list[len(line_list)-1]
-    pos = -1
-    line_list_len = len(line_list)
-    #stele_data = single_stele()
-    stele_dict = stelae_data()
-    stop_reading_tag = '三国·魏'
-    exception_chars = ['之', '兮', '乎', '也', '矣']
-    #if '・' in last_char or '…' in last_char or '□' in last_char:
-    #    continue
-
-    for ll in line_list:
-        pos += 1
-        if '：' in ll:
-            append_line_to_utf8_file(output_file, ll)
-        elif '。' in ll:
-            if '；' in ll:
-                ll = ll.replace('；', '。')
-            ll = ll.split('。')
-            for sub_ll in ll:
-                if sub_ll[len(sub_ll)-1] == '）': # if last char i '）'
-                    spos = sub_ll.rfind('（')
-                    left = sub_ll[:spos]
-                    right = sub_ll[spos:]
-                    last_char = left[0:len(left)-1]
-                    left = left[0:len(left)-1]
-                    sub_ll = left + 'a' + last_char + right
-
-        continue
-        if stop_reading_tag in ll:
-            break
-        if '：' in ll: # new entry
-            ll = ll.split('：')
-            # if the beginning of a poem section
-            if any(zh_num in ll[0] for zh_num in base_num_list):
-                # if previous poem exists, print it
-                if poem_content:
-                    for l in poem_content:
-                        if is_verbose:
-                            print(l)
-                if mou_unique:
-                    stele_dict.remove_last_poem_line_if_blank(mou_unique)
-                    #print('')
-                start_new_poem = True
-                poem_content = []
-                zh_num = ll[0].strip()
-                if '《' in ll[1]: # type A parsing
-                    stele_name = ll[1].split('》')[0] + '》'
-                    date_data = ll[1].split('，')
-                    try:
-                        page_num = date_data[2].lower()
-                    except IndexError as ie:
-                        page_num = ''
-                        x = 1
-                    try:
-                        date_data = date_data[1]
-                    except IndexError as ie:
-                        x = 1
-                    zh_date_year = date_data.split('（')[0]
-                    western_year = date_data.split('（')[1]
-                    western_year = western_year.split('）')[0]
-                    zh_date_month = date_data.split('）')[1]
-                else: # type B parsing
-                    page_num = ''
-                    right_side_data = ll[1].split('　')
-                    stele_name = '《' + right_side_data[0] + '》'
-                    try:
-                        date_data = right_side_data[1]
-                    except:
-                        date_data = ''
-                        #continue
-                    if '（' in date_data:
-                        date_data = date_data.split('（')
-                        zh_date_year = date_data[0]
-                        western_year = date_data[1].split('）')[0]
-                        zh_date_month = date_data[1].split('）')[1]
-                ara_num = convert_zh_num2ara_num(zh_num) # arabic number
-                if ara_num == '142':
-                    x = 1
-                #print(zh_num + ':' + ara_num)
-                mou_unique = 'Mou2008.' + ara_num
-                #print(mou_unique)
-                msg = mou_unique + delim + zh_num + '：' + stele_name + '，' + zh_date_year + '（' + western_year
-                msg += '）' + zh_date_month
-                stele_dict.add_stele(mou_unique, stele_name, zh_date_year + zh_date_month, western_year, page_num)
-                #stele_data.add_entry(mou_unique, stele_name, zh_date_year + zh_date_month, western_year, page_num)
-                if page_num:
-                    msg += '，' + page_num
-                if is_verbose:
-                    print(msg)
-                start_new_poem = False
-            else:
-                poem_content.append('X'.join(ll))
-                stele_dict.add_poem_content(mou_unique,'：'.join(ll))
-                #stele_data.add_poem_content('：'.join(ll))
-        else:
-            if ll:
-                poem_content.append(ll)
-                #stele_data.add_poem_content(ll)
-                stele_dict.add_poem_content(mou_unique,ll)
-            else:
-                if ll == '':
-                    if poem_content and poem_content[len(poem_content)-1] != '': # don't add two empty lines in a row
-                        poem_content.append(ll)
-                        #stele_data.add_poem_content(ll)
-                        stele_dict.add_poem_content(mou_unique, ll)
-        return
 
 def test_get_schuessler_late_han_for_glyph(glyph_list):
     for glyph in glyph_list:
@@ -3828,42 +4244,6 @@ def test_is_hanzi():
             print(tc + ' IS a hanzi!')
         else:
             print(tc + ' is NOT a hanzi!')
-
-def is_hanzi(test_ord):
-    retval = False
-    if '\u4e00' <= test_ord <= '\u9fff':
-        return True
-        #    U+20000..U+2A6D6 : CJK Unified Ideographs Extension B
-    elif test_ord >= '\U00020000' and test_ord <= '\U0002a6d6':
-        retval = True
-    # U+2F800..U+2FA1D : CJK Compatibility Supplement
-    if test_ord >= '\U0002f800' and test_ord <= '\U0002fa1d':
-        retval = True
-        #  the cjk radicals supplement  0x2e80 - 0x2eff
-    elif test_ord >= '\u2e80' and test_ord <= '\u2eff':
-        retval = True
-        # kangxi rads 0x2f00 - 0x2fdf
-    elif test_ord >= '\u2f00' and test_ord <= '\u2fdf':
-        retval = True
-        # DON'T NEED THIS: description characters  0x2ff0 - 0x2fff
-        # DON'T NEED THIS: cjk xymbols and punctuation: 0x3000 - 0x303f
-        # cjk strokes: 0x31c0 - 0x31ef
-    elif test_ord >= '\u31c0' and test_ord <= '\u31ef':
-        retval = True
-        # DON'T NEED THIS: enclosed cjk letters and months: 0x3200 - 0x32ff
-        # CJK compatibility: 0x3300 - 0x33ff
-    elif test_ord >= '\u3300' and test_ord <= '\u33ff':
-        retval = True
-        # CJK compatibility ideographs: 0xf900 - 0xfaff
-    elif test_ord >= '\uf900' and test_ord <= '\ufaff':
-        retval = True
-        # CJK compatibiltiy forms; 0xfe30 - 0xfe4f
-    elif test_ord >= '\ufe30' and test_ord <= '\ufe4f':
-        retval = True
-        # enclosed ideographic supplement:  0x1f200 - 0x1f2ff
-    elif test_ord >= '\U0001f200' and test_ord <= '\U0001f2ff':
-        retval = True
-    return retval
 
 def is_multibyte_unicode(test_ord):
     retval = False
@@ -3893,7 +4273,6 @@ def get_parsed_bentley_2015_late_han_data():
         if ll[0] not in retval:
             retval[ll[0]] = ''
         retval[ll[0]] = ll[1]
-        #print(ll[0] + '|' + ll[1])
     return retval
 
 def parse_bentley_2015(is_verbose=False):
@@ -3916,7 +4295,6 @@ def parse_bentley_2015(is_verbose=False):
     included_chars = []
     exceptions = ['kah MC: kɛ: GO: ke KN: ka', 'kah MC: kɛ: GO: kai KN: ka', 'śas MC: śjäih GO: se KN: sei'
         , 'ŋɑ MC: ŋɔ GO: gu KN: go']
-    #reject_list = ['蜂音','可愛', '馬聲']
     for ll in line_list:
         if not ll.strip():
             continue
@@ -3925,22 +4303,13 @@ def parse_bentley_2015(is_verbose=False):
             if is_verbose:
                 print('start reading')
         if start_reading:
-            #print(ll)
             potential_hanzi = ll.strip()
             if is_hanzi(potential_hanzi) and len(potential_hanzi) == 1:
-                #if len(potential_hanzi) == 2 and not is_multibyte_unicode(potential_hanzi):
-                #    continue
                 hanzi = potential_hanzi
                 if hanzi not in retval:
                     retval[hanzi] = []
-                #retval[hanzi].append(hanzi)
                 continue
-            #else:
-            #    hanzi = ''
             if 'LH: ' in ll and hanzi:
-                if hanzi == '聚':
-                    x = 1
-                #print(ll)
                 late_han = ll.split('LH: ')[1]
                 if '*kie > ' in late_han:
                     late_han = late_han.replace('*kie > ', '')
@@ -3955,7 +4324,7 @@ def parse_bentley_2015(is_verbose=False):
                 late_han = late_han.replace(' < ', ' ')
                 late_han = late_han.replace(' / ', ' ')
                 late_han = late_han.replace('~', ' ')
-                late_han = late_han.replae('th', 'tʰ')
+                late_han = late_han.replace('th', 'tʰ')
                 late_han = late_han.replace('ph', 'pʰ')
                 if '(' in late_han:
                     root = late_han.split('(')[0]
@@ -3965,13 +4334,9 @@ def parse_bentley_2015(is_verbose=False):
                         late_han = root + ' ' + root + ending
                     else:
                         late_han = root + ' ' + root + 'h ' + root + 'ʔ'
-                #print(late_han)
-                #late_han = late_han.split(' ')[0].strip()
                 if late_han == 'NA' or not late_han.strip():
                     late_han = ''
                 if hanzi and late_han:
-                    if hanzi == '莽':
-                        x = 1
                     if ' ' in late_han:
                         for lh in late_han.split(' '):
                             if lh.strip() and lh.strip() not in retval[hanzi]:
@@ -3979,7 +4344,6 @@ def parse_bentley_2015(is_verbose=False):
                     else:
                         if late_han and late_han not in retval[hanzi]:
                             retval[hanzi].append(late_han.strip())
-#                        retval[hanzi].append(late_han)
                     hanzi = ''
                     late_han = ''
     for hz in retval:
@@ -4005,7 +4369,6 @@ def parse_bentley_2015(is_verbose=False):
         print(str(len(retval)) + ' total entries in Bentley 2015.')
         print('\t' + str(len(has_late_han)) + ' of them have Han data.')
         print('\t' + str(len(no_late_han)) + ' of them do NOT have Han data.')
-    #data correction
     if '埃' in retval:
         retval['埃'] = 'ʔə'
     return retval
@@ -4025,14 +4388,12 @@ def readin_preparsed_schuessler_late_han_data():
             ll = ll.split('#')[0]
             if not ll.strip():
                 continue # skip over comment line
-        #print('ll='+ll)
         entry = ll.split('\t')[0]
         data = ll.replace(entry + '\t','').split('NEW_ENTRY')
         if entry not in retval:
             retval[entry] = []
         for d in data:
             retval[entry].append(d)
-        #print(entry + ':' + 'NE'.join(retval[entry]))
     return retval
 
 def create_schuessler_late_han_data_file():
@@ -4054,7 +4415,6 @@ def create_schuessler_late_han_data_file():
                 data_str += e + 'NEW_ENTRY'
             data_str = data_str[0:len(data_str)-len('NEW_ENTRY')] # get rid of last space
             append_line_to_utf8_file(output_file, s + '\t' + data_str)
-            #print(s + ': ' + '\t\n'.join(schuessler[s]))
 
 def test_get_schuessler_plus_bentley_2015():
     print('Get Schuessler data...')
@@ -4105,6 +4465,30 @@ def create_schuessler_plus_bentley_2015_file():
         print(s + ': ' + data_str)
     return schuessler
 
+def readin_schuessler_n_bentley_late_han_data(is_verbose=False):
+    funct_name = 'readin_schuessler_n_bentley_late_han_data()'
+    raw_data = readin_schuessler2007_n_bentley2015_combo() # this reads in pinyin, OC, MC and LHan
+    #raw_data = raw_data[2:len(raw_data)] # skip first two lines of the file
+    raw_data.pop('wf_grapʰ')
+    lhan_pos = 2
+    retval = {}
+    for rd in raw_data:
+        if '#' in rd:
+            continue
+        if rd not in retval:
+            retval[rd] = []
+        entry_data = raw_data[rd][0].split('NEW_ENTRY')
+        for ed in entry_data:
+            ed = ed.split('\t')
+            if ed[lhan_pos].strip():
+                if ed[lhan_pos] not in retval[rd]:
+                    if 'list' in str(type(ed[lhan_pos])):
+                        x = 1
+                    retval[rd].append(ed[lhan_pos])
+                if is_verbose:
+                    print(rd + ': LHan = ' + ed[lhan_pos])
+    return retval
+
 def readin_schuessler2007_n_bentley2015_combo():
     funct_name = 'readin_schuessler2007_n_bentley2015_combo()'
     input_file = os.path.join(get_soas_code_dir(), 'hanproj', 'phonological_data', 'combo_schuessler2007_n_bentley2015.txt')
@@ -4126,9 +4510,6 @@ def compare_schuessler_to_bentley_2015():
     funct_name = 'compare_schuessler_to_bentley_2015()'
     schuessler = get_schuessler_late_han_data()
     bentley = parse_bentley_2015()
-    x = 1
-    #for s in schuessler:
-    #    print(s + ': ' + ''.join(schuessler[s]))
     in_b_not_in_s = []
     for b in bentley:
         print(b + ': ' + ' '.join(bentley[b]))
@@ -4139,10 +4520,31 @@ def compare_schuessler_to_bentley_2015():
 
 class schuessler_n_bentley:
     def __init__(self):
-        self.raw_dict = readin_schuessler2007_n_bentley2015_combo()
+        self.raw_dict = {}#readin_schuessler2007_n_bentley2015_combo()
+        self.raw_dict2 = readin_most_complete_schuessler_data()
         self.lhan_dict = {}
-        self.fill_lhan_dict()
+        self.lhan_dict2 = {}
+        #self.fill_lhan_dict()
+        self.fill_lhan_dict2()
         self.class_name = 'schuessler_n_bentley'
+
+    def fill_lhan_dict2(self, is_verbose=False):
+        funct_name = 'fill_lhan_dict2()'
+        if not self.raw_dict2:
+            print(self.class_name + '::' + funct_name + ' ERROR!')
+            msg = '\tMust first run ' + self.class_name + '::'
+            msg += 'readin_most_complete_schuessler_data()'
+            print('\t' + msg)
+            return
+        for e in self.raw_dict2:
+            if e not in self.lhan_dict2:
+                self.lhan_dict2[e] = []
+            pron = self.raw_dict2[e]
+            for subpron in pron:
+                subpron = subpron.split(' ')
+                for p in subpron:
+                    if p not in self.lhan_dict2[e]:
+                        self.lhan_dict2[e].append(p)
 
     def fill_lhan_dict(self, is_verbose=False):
         funct_name = 'fill_lhan_dict()'
@@ -4184,12 +4586,12 @@ class schuessler_n_bentley:
 
     def get_late_han(self, zi):
         retval = []
-        if zi not in self.lhan_dict:
+        if zi not in self.lhan_dict2:
             return retval
-        return self.lhan_dict[zi]
+        return self.lhan_dict2[zi]
 
     def get_entry_list(self):
-        return self.lhan_dict.keys()
+        return self.lhan_dict2.keys()
 
 def analyze_schuessler_n_bentley_later_han():
     funct_name = 'analyze_schuessler_n_bentley_later_han()'
@@ -4199,8 +4601,7 @@ def analyze_schuessler_n_bentley_later_han():
     for e in entry_list:
         lhan = schuessler.get_late_han(e)
         for lh in lhan:
-            initial, medial, final, pcoda = parse_schuessler_lhan_syllable(lh)
-            #if initial == 'X':
+            initial, medial, final, pcoda = parse_schuessler_late_han_syllable(lh)
             msg = initial + '-'
             if medial.strip():
                 msg += medial + '-'
@@ -4208,55 +4609,12 @@ def analyze_schuessler_n_bentley_later_han():
             if pcoda.strip():
                 msg += '-' + pcoda
             print(e + ': ' + lh + '(' + msg + ')')
-        #print(e + ': ' + ', '.join(lhan))
-
 
 def is_this_the_initial(pinitial, reco):
     return pinitial == reco[0:len(pinitial)]
 
 def get_initial_for_schuessler_lhan(reco):
-    return parse_schuessler_lhan_syllable(reco)
-
-def parse_schuessler_lhan_syllable(reco):
-    funct_name = 'parse_schuessler_lhan_syllable()'
-    initial = ''
-    if aspiration in reco:
-        initial = reco.split(aspiration)[0] + aspiration
-    else:
-        for pi in lhan_initials:
-            if is_this_the_initial(pi, reco):
-                initial = pi
-                break
-    if not initial.strip():
-        if reco[0] == 'w' or reco[0] == 'a':
-            initial = zero_initial
-        else:
-            initial = 'X'
-    final = reco[len(initial):len(reco)]
-    # if there is a medial, remove it from the final
-    medial = ''
-    if final[0] in lh_medials:
-        try:
-            if final[1] in lh_main_vowels:
-                medial = final[0]
-                final = final[1:len(final)]
-        except:
-            x = 1
-    pcoda = ''
-    if final[len(final)-1] in post_codas:
-        pcoda = final[len(final)-1]
-        final = final[0:len(final)-1]
-        x = 1
-         # if final[0] is in the medials AND
-        #  final[1] is in the main vowels, then final[0] IS a medial
-    return initial, medial, final, pcoda
-
-def get_schuessler_lhan_rhyme_from_reconstruction(reco):
-    funct_name = 'get_schuessler_lhan_rhyme_from_reconstruction()'
-
-def delete_file_if_it_exists(filename):
-    if os.path.isfile(filename):
-        os.remove(filename)
+    return parse_schuessler_late_han_syllable(reco)
 
 def insert_rhyme_marker_at_pos(line, rhyme_pos, rhyme_marker):
     if rhyme_pos == -1:
@@ -4265,119 +4623,818 @@ def insert_rhyme_marker_at_pos(line, rhyme_pos, rhyme_marker):
         rhyme_char = line[rhyme_pos]
     except IndexError as ie:
         rhyme_char = '・'
+    if rhyme_char == '}':# '上辟彔{礻＋羽}'
+        retval = ''
+        if '{' in line:
+            rpos = line.rfind('{')
+            retval = line[:rpos] + rhyme_marker + line[rpos:]
+            return retval
+        else:
+            return line
     if '・' in rhyme_char or '…' in rhyme_char or '□' in rhyme_char:
         return line
     if line[len(line)-1] == '）':
         rhyme_pos = line.find('（') - 1
     return line[0:rhyme_pos] + rhyme_marker + line[rhyme_pos:len(line)]
 
-def test_annotate_stele_inscription():
-    funct_name = 'test_annotate_stele_inscription()'
-    #D:\Ash\SOAS\code\data
-    file_num = '4'
-    input_file = os.path.join(get_soas_code_dir(), 'data', 'mao2008_test_poem' + file_num + '.txt')
-    output_file = os.path.join(get_soas_code_dir(), 'data', 'nannotated_mao2008_test_poem' + file_num + '.txt')
-    if 'mao2008_test_poem1.txt' in input_file:
-        s_id = 'mao2008_poem30'
-    elif 'mao2008_test_poem2.txt' in input_file:
-        s_id = 'mao2008_poem34'
-    elif 'mao2008_test_poem3.txt' in input_file:
-        s_id = 'mao2008_poem44'
-    elif 'mao2008_test_poem4.txt' in input_file:
-        s_id = 'mao2008_poem90'
+def is_compatibility_char(entry):
+    funct_name = 'is_compatibility_char()'
+    retval = False
+    if not entry.strip():
+        return retval
+    if len(entry) != 1:
+        return retval
+    entry = ord(entry)
+    if entry >= 0xf900 and entry <= 0xfaff:
+        retval = True
+    return retval
 
+def get_data_from_pos(string, position, delim):
+    try:
+        retval = string.split(delim, position + 1)[int(position)]
+    except IndexError as ie_err:
+        print(ie_err)
+        retval = -1
+    return retval
+
+def add_missing_schuessler_data_to_most_complete():
+    funct_name = 'add_missing_schuessler_data_to_most_complete()'
+    addendum = get_schuessler_late_han_addendum_data()
+    output_file = os.path.join(get_phonological_data_dir(), 'most_complete_schuessler_late_han_data.txt')
+    for k in addendum:
+        msg_out = k + '\t' + ' '.join(addendum[k])
+        append_line_to_utf8_file(output_file, msg_out)
+
+def create_need_shengfu_file():
+    funct_name = 'create_need_shengfu_file()'
+    output_file = os.path.join(get_phonological_data_dir(), 'need_shengfu_file.txt')
     delete_file_if_it_exists(output_file)
-    poem = readlines_of_utf8_file(input_file)
-    poem = poem[1:len(poem)]
-    for l in poem:
-        print(l)
-    s_id = 'mao2008_poem30'
-    rw_words = get_numbered_rhyme_words_from_stele_inscription(s_id, poem)
-    for line_k in rw_words:
-        msg_out = ''
-        for k in rw_words[line_k]:
-            tup_list = rw_words[line_k][k]
-            for tup in tup_list:
-                rw = tup[0]
-                rpos = tup[1]
-                orig_line = tup[2]
-                print(str(line_k) + ': ' + rw + ', ' + str(rpos) + ', ' + orig_line)
-                new_line = insert_rhyme_marker_at_pos(orig_line, rpos, 'a')
-                msg_out += new_line + '。'
-                #print('\t' + new_line)
-        print(msg_out) # output to annotated file
+    mlist = '埆韻洧鑒澎辻勛神漳驤溏紋喚巇趺痴婿廎毹尫晴鎔樣滓紜衫㲹圢暟炅榷炯皚讖蹤叺湏嬆璘𣧑𥚝鄹昶淇踏駬乕盒轃厘花沄嵗俌傐頁了瘢嗤㜰箏靂廿祑澍卅廂裡箋鄒崎篌璫㐬蒂貎稀斦祤'
+    mlist = list(set(mlist))
+    for m in mlist:
+        append_line_to_utf8_file(output_file, m)
 
-#compare_schuessler_to_bentley_2015()
-#test_is_hanzi()
-#parse_bentley_2015()
-#cydifflib_test()
-#test_get_the_intersection_of_two_lists()
-#test_get_the_difference_of_two_lists()
-#compare_poem_names_between_lu_1983_and_raw_han_csv()
-#test_trad_to_simp_conversion_and_vice_verse()
-#sinopy_test()
-#readin_bronze_type_dict()
-#get_schuessler_late_han_data()
-#test_rolling_n_lines()
+def combine_schuessler_bentley_n_addendum(is_verbose=False):
+    funct_name = 'combine_schuessler_bentley_n_addendum()'
+    addendum = get_schuessler_late_han_addendum_data()
+    output_file = os.path.join(get_phonological_data_dir(), 'most_complete_schuessler_late_han_data.txt')
+    delete_file_if_it_exists(output_file)
+    snb = readin_schuessler_n_bentley_late_han_data()
+    for k in addendum:
+        if k not in snb:
+            snb[k] = []
+        add_this = ' '.join(addendum[k])
+        if add_this.strip():
+            snb[k].append(add_this)
+    for k in snb:
+        k_sub = ' '.join(snb[k])
+        if not k_sub.strip():
+            continue
+        msg_out = k + '\t' + ' '.join(snb[k])
+        if is_verbose:
+            print(msg_out)
+        append_line_to_utf8_file(output_file, msg_out)
 
-#readin_kyomeishusei2015_han_mirror_data()
+def test_are_these_chars_in_most_complete_schuessler():
+    funct_name = 'test_are_these_chars_in_most_complete_schuessler()'
+    print(funct_name + ' Welcome!')
+    char_list = '槐蹊厘濭噫滂尫沰完婿毹蒂鏘喚幬笳勉靑精神福海祥祐悔朙萠朖者節皚洤祝辻楼卅視虜彡樣祉傐湏祑盖盒廉穀㲹叺'
+    char_list = list(set(char_list))
+    are_these_chars_in_most_complete_schuessler(char_list)
 
-#readin_mao_2008_stelae_data()
+def are_these_chars_in_most_complete_schuessler(char_list):
+    funct_name = 'are_these_chars_in_most_complete_schuessler()'
+    schuessler = readin_most_complete_schuessler_data()
+    not_in_schuessler = []
+    for c in char_list:
+        if c in schuessler:
+            print(c + ': ' + schuessler[c])
+        else:
+            not_in_schuessler.append(c)
+    if not_in_schuessler:
+        print(str(len(not_in_schuessler)) + ' chars are still missing Schuessler data:')
+        print('\t' + ''.join(not_in_schuessler))
 
-#process_mao_2008_stelae_data()
-#process_kyomeishusei2015_han_mirror_data()
+def test_schuessler_syllable_parser():
+    fuct_name = ''
+    test_data = ['ṇɑᴮ', 'ṇɑᶜ']
+    for td in test_data:
+        x = 1
+        initial, medial, final, pcoda = parse_schuessler_late_han_syllable(td)
+        print('parse_schuessler_late han_syllable(\'' + td + '\') returns \'' + final + '\'')
+    is_verbose = True
 
-#test_schuessler_phonological_data()
+def test_print_out_list_vertically():
+    funct_name = 'test_print_out_list_vertically()'
+    test_str = '肅肅我祖。國自豕韋。黼衣朱紱。四牡龍旗。彤弓斯征。撫寧遐荒。總齊群邦。以翼大商。迭彼大彭。勛績惟光。至於有周。歷世會同。王赧聽譖。寔絕我邦。我邦既絕。厥政斯逸。賞罰之行。非繇王室。庶尹群后。靡扶靡衛。五服崩離。宗周以隊。我祖斯微。遷於彭城。在予小子。勤誒厥生。阸此嫚秦。耒耜以耕。悠悠嫚秦。上天不寧。迺眷南顧。授漢于京。于赫有漢。四方是征。靡適不懷。萬國逌平。迺命厥弟。建侯于楚。俾我小臣。惟傅是輔。競競元王。恭儉凈壹。惠此黎民。納彼輔弼。饗國漸世。垂烈於後。迺及夷王。XX克奉厥緒。咨命不永。惟王統祀。左右陪臣。此惟皇士。如何我王。不思守保。不惟履冰。以繼祖考。邦事是廢。逸游是娛。犬馬繇繇。是放是驅。務彼鳥獸。忽此稼苗。烝民以匱。我王以偷。所弘非德。所親非俊。唯囿是恢。唯諛是信。睮睮諂夫。咢咢黃發。如何我王。曾不是察。既藐下臣。追欲從逸。嫚彼顯祖。輕茲削黜。嗟嗟我王。漢之睦親。曾不夙夜。以休令聞。穆穆天子。臨爾下土。明明群司。執憲靡顧。正遐繇近。殆其怙茲。嗟嗟我王。曷不此思。非思非鑒。嗣其罔則。瀰瀰其失。岌岌其國。致冰匪霜。致隊靡嫚。瞻惟我王。昔靡不練。興國救顛。孰違悔過。追思黃發。秦繆以霸。歲月其徂。年其逮耇。于昔君子。庶顯於後。我王如何。曾不斯覽。黃發不近。胡不時監。'
+    print_out_list_vertically(test_str, '。')
 
-#test_distance_between_tags()
-#test_handle_short_parens()
+def print_out_list_vertically(data, delim):
+    data = data.split(delim)
+    inc = 1
+    rw_list = []
+    for d in data:
+        if not inc % 2: # handle cases with rhymes
+            rhyme = d[len(d)-1]
+            line = d[0:len(d)-1]
+            print(line + '[' + rhyme + ']' + delim)
+            rw_list.append(rhyme)
+        else: # handle the rest
+            if d.strip():
+                print(d + delim)
+        inc += 1
+    print(','.join(rw_list))
 
-#naively_annotate_han_dynasty_poems()
+# description
+# the XX in the data below indicate places where '\n' belong, resulting in data like:
+# line1: 大孝備矣。休德昭清。高張四縣。樂充宮庭。芬樹羽林。雲景杳冥。金支秀華。庶旄翠旌。七始華始。肅倡和聲。神來晏娭。庶幾是聽。
+# line2: 粥粥音送。細齊人情。忽乘青玄。熙事備成。清思眑眑。經緯冥冥。
+# line3: 我定曆數。人告其心。敕身齊戒。施教申申。乃立祖廟。敬明尊親。大矣孝熙。四極爰轃。
+#
+# For this configuation, the test will see how well annotation performs one a line by line basis:
+# In another test, it'll be determined how well annotation performs for the entire poem, without taking lines into
+# consideration
+def schuessler_line_by_line_test():
+    funct_name = 'schuessler_line_by_line_test()'
+    test_str = '大孝備矣。休德昭清。高張四縣。樂充宮庭。芬樹羽林。雲景杳冥。金支秀華。庶旄翠旌。七始華始。肅倡和聲。神來晏娭。庶幾是聽。XX粥粥音送。細齊人情。忽乘青玄。熙事備成。清思眑眑。經緯冥冥。XX我定曆數。人告其心。敕身齊戒。施教申申。乃立祖廟。敬明尊親。大矣孝熙。四極爰轃。XX王侯秉德。其鄰翼翼。顯明昭式。清明鬯矣。皇帝孝德。竟全大功。撫安四極。XX海內有奸。紛亂東北。詔撫成飾。武臣承德。行樂交逆。簫群慝。肅為濟哉。蓋定燕國。XX大海蕩蕩水所歸。高賢愉愉民所懷。大山崔。百卉殖。民何貴。貴有德。XX安其所。樂終產。樂終產。世繼緒。飛龍秋。游上天。高賢愉。樂民人。XX豐草葽。女羅施。善何如。誰能回。大莫大。成教德。長莫長。被無極。XX雷震震。電耀耀。明德鄉。治本約。治本約。澤弘大。加被寵。咸相保。德施大。世曼壽。XX都荔遂芳。窅{宀瓜}桂華。孝奏天儀。若日月光。乘玄四龍。回馳北行。羽旄殷盛。芬哉芒芒。孝道隨世。我署文章。XX馮馮翼翼。承天之則。吾易久遠。燭明四極。XX慈惠所愛。美若休德。杳杳冥審。克綽永福。XX磑磑即即。師象山則。鳴呼孝哉。案撫戎國。蠻夷竭歡。象來致福。兼臨是愛。終無兵革。XX嘉薦芳矣。告靈饗矣。告靈既饗。德音孔臧。惟德之臧。建侯之常。承保天休。令問不忘。XX皇皇鴻明。盪侯休德。嘉承天和。伊樂厥福。在樂不荒。惟民之則。浚則師德。下民咸殖。XX令問在舊。孔容翼翼。XX孔容之常。承帝之明。下民之樂。子孫保光。承順溫良。受帝之光。嘉薦令芳。壽考不忘。XX承帝明德。師象山則。雲施稱民。永受厥福。承容之常。承帝之明。下民安樂。萬壽無疆。'
+    s_annotator = schuessler_stanza_annotator()
+    test_lines = test_str.split('XX') #get_rhyme_words_naively2
+    linc = 0
+    line_length = 0 # # not used anyway
+    stanza_id = 'Lu1983.114'
+    nonrw_lines_dict = {}
+    every_line_rhymes = False
+    for line in test_lines:
+        print('='*100)
+        linc += 1
+        rw_words = get_rhyme_words_from_stanza(line, stanza_id, every_line_rhymes)
+        s_annotator.reset()
+        output_str = ''
+        for rw_data in rw_words:
+            rw = rw_data[0]
+            rw_pos = rw_data[1]
+            orig_line = rw_data[2]
+            line_id = rw_data[3]
+            if rw != -1:
+                s_annotator.add_rhyme_word(rw, rw_pos, orig_line, line_id)
+            else:
+                if line_id not in nonrw_lines_dict:
+                    nonrw_lines_dict[line_id] = ''
+                nonrw_lines_dict[line_id] = orig_line
+        s_annotated_lines = s_annotator.get_annotated_lines()
+        for line_inc in s_annotated_lines:
+            al = s_annotated_lines[line_inc]
+            rw = al[0]
+            rw_pos = al[1]
+            orig_line = al[2]
+            line_id = al[3]
+            annotated_line= al[4]
+            print(annotated_line)
 
+# description
+# the XX in the data below indicate places where '\n' belong, resulting in data like:
+# line1: 大孝備矣。休德昭清。高張四縣。樂充宮庭。芬樹羽林。雲景杳冥。金支秀華。庶旄翠旌。七始華始。肅倡和聲。神來晏娭。庶幾是聽。
+# line2: 粥粥音送。細齊人情。忽乘青玄。熙事備成。清思眑眑。經緯冥冥。
+# line3: 我定曆數。人告其心。敕身齊戒。施教申申。乃立祖廟。敬明尊親。大矣孝熙。四極爰轃。
+#
+# For this configuation, the test will see how well annotation performs one entire poem basis:
+# In another test, it'll be determined how well annotation performs on a line by line basis
+#
+# TO DO:
+#  was trying to get this such that i could do visualization on nodes and edges
+#  結果： it's a mess.
+def schuessler_full_poem_test():
+    funct_name = 'schuessler_full_poem_test()'
+    full_test_str = '大孝備矣。休德昭清。高張四縣。樂充宮庭。芬樹羽林。雲景杳冥。金支秀華。庶旄翠旌。七始華始。肅倡和聲。神來晏娭。庶幾是聽。XX粥粥音送。細齊人情。忽乘青玄。熙事備成。清思眑眑。經緯冥冥。XX我定曆數。人告其心。敕身齊戒。施教申申。乃立祖廟。敬明尊親。大矣孝熙。四極爰轃。XX王侯秉德。其鄰翼翼。顯明昭式。清明鬯矣。皇帝孝德。竟全大功。撫安四極。XX海內有奸。紛亂東北。詔撫成飾。武臣承德。行樂交逆。簫群慝。肅為濟哉。蓋定燕國。XX大海蕩蕩水所歸。高賢愉愉民所懷。大山崔。百卉殖。民何貴。貴有德。XX安其所。樂終產。樂終產。世繼緒。飛龍秋。游上天。高賢愉。樂民人。XX豐草葽。女羅施。善何如。誰能回。大莫大。成教德。長莫長。被無極。XX雷震震。電耀耀。明德鄉。治本約。治本約。澤弘大。加被寵。咸相保。德施大。世曼壽。XX都荔遂芳。窅{宀瓜}桂華。孝奏天儀。若日月光。乘玄四龍。回馳北行。羽旄殷盛。芬哉芒芒。孝道隨世。我署文章。XX馮馮翼翼。承天之則。吾易久遠。燭明四極。XX慈惠所愛。美若休德。杳杳冥審。克綽永福。XX磑磑即即。師象山則。鳴呼孝哉。案撫戎國。蠻夷竭歡。象來致福。兼臨是愛。終無兵革。XX嘉薦芳矣。告靈饗矣。告靈既饗。德音孔臧。惟德之臧。建侯之常。承保天休。令問不忘。XX皇皇鴻明。盪侯休德。嘉承天和。伊樂厥福。在樂不荒。惟民之則。浚則師德。下民咸殖。XX令問在舊。孔容翼翼。XX孔容之常。承帝之明。下民之樂。子孫保光。承順溫良。受帝之光。嘉薦令芳。壽考不忘。XX承帝明德。師象山則。雲施稱民。永受厥福。承容之常。承帝之明。下民安樂。萬壽無疆。'
+    half_test_str = '大孝備矣。休德昭清。高張四縣。樂充宮庭。芬樹羽林。雲景杳冥。金支秀華。庶旄翠旌。七始華始。肅倡和聲。神來晏娭。庶幾是聽。XX粥粥音送。細齊人情。忽乘青玄。熙事備成。清思眑眑。經緯冥冥。XX我定曆數。人告其心。敕身齊戒。施教申申。乃立祖廟。敬明尊親。大矣孝熙。四極爰轃。XX王侯秉德。其鄰翼翼。顯明昭式。清明鬯矣。皇帝孝德。竟全大功。撫安四極。XX海內有奸。紛亂東北。詔撫成飾。武臣承德。行樂交逆。簫群慝。肅為濟哉。蓋定燕國。XX大海蕩蕩水所歸。高賢愉愉民所懷。大山崔。百卉殖。民何貴。貴有德。XX安其所。樂終產。樂終產。世繼緒。飛龍秋。游上天。高賢愉。樂民人。XX豐草葽。女羅施。善何如。誰能回。大莫大。成教德。長莫長。被無極。'
+    test_str = half_test_str # this one saves time if set to 'half_test_str'
+    base_stanza_id = 'Lu1983.114'
+    s_annotator = schuessler_stanza_annotator()
+    test_lines = test_str.split('XX')  # get_rhyme_words_naively2
+    print('='*100)
+    print(' '*40 + ' INPUT DATA (' + base_stanza_id + ')')
+    print('='*100)
+    print('\n'.join(test_lines))
+    print('='*100)
+    linc = 0
+    line_length = 0  # # not used anyway
+    rmarker = rhyme_marker()
+    nonrw_lines_dict = {}
+    s_annotator.reset()
+    lh_fayin_dict = {}
+    every_line_rhymes = False
+    rw_words = []
+    rnet = new_rhyme_network()
+    default_color = '#80B8F0'
+    graph = nx.Graph()
+    options = 'var options = {  "edges": {    "color": {      "inherit": "to"    },    "smooth": false  },  "physics": {    "minVelocity": 0.75  }}'
+    is_half = 'full'
+    heading = 'Schuessler Full Poem Test'
+    if test_str == half_test_str:
+        heading = 'Schuessler Half Poem Test'
+        is_half = 'half'
+    pyvis_net = Network('1000px', '1000px', heading=heading, font_color='white')
+    pyvis_net.set_options(options)
+    #
+    # Step 1: Collect Rhyme words
+    for line in test_lines:
+        linc += 1
+        stanza_id = base_stanza_id + '.' + str(linc)
+        rw_words += get_rhyme_words_from_stanza(line, stanza_id, every_line_rhymes)
+        output_str = ''
+    #
+    # Step 2: Process Rhyme words
 
-#test_visualize_infomap_output()
-#explore_rhyme_structure_of_han_dynasty_poems()
+    #      2a: add rhyme words to the Schuessler annotator
+    rw_list = []
+    rw_data_inc = 0
+    for rw_data in rw_words:
+        rw_data_inc += 1
+        if rw_data_inc == 130:
+            x = 1
+        rw = rw_data[0]
+        rw_pos = rw_data[1]
+        orig_line = rw_data[2]
+        line_id = rw_data[3]
+        # print(rw + ': (' + str(rw_pos) + ', ' + orig_line + ', ' + line_id + ')')
+#        if rw_pos != -1:
+        s_annotator.add_rhyme_word(rw, rw_pos, orig_line, line_id)
+        if rw.strip():
+            rnet.add_node(rw, rw_pos, orig_line, line_id)
+            graph.add_node(rw,weight=1)#rhyme_word, weight=weight
+            rw_list.append(rw)
+    lhan = ''
+    #
+    # add nodes
+    rmarker.fill_marker2rhyme_dict(rw_list)
+    s_annotator.fill_marker2rhyme_dict(rw_list)
+    s_annotated_lines = s_annotator.get_annotated_lines() # needed
+    marker2rw_list = s_annotator.get_marker2rw_list() # needed
 
-input = ['裔', '外', '界', '嵑', '世']
-#input = ['教', '吐']
-input = ['從', '羊', '光']
-#test_get_schuessler_late_han_for_glyph(input)
+    for line_inc in s_annotated_lines:
+        al = s_annotated_lines[line_inc]
+        rw = al[0]
+        rw_pos = al[1]
+        orig_line = al[2]
+        line_id = al[3]
+        annotated_line = al[4]
+        print(annotated_line)
+        #
+        # Add Schuessler Edges
+        for m in marker2rw_list:
+            rw_list = marker2rw_list[m]
+            edge_list = given_rhyme_group_return_list_of_edges(rw_list, base_stanza_id)
+            for edge in edge_list:
+                left_char = edge[0]
+                right_char = edge[1]
+                num_rhymes = edge[2]
+                rhyme_id = edge[3]
+                if not let_this_char_become_node(left_char):
+                    continue
+                if not let_this_char_become_node(right_char):
+                    continue
+                rnet.add_edge(left_char, right_char, num_rhymes, rhyme_id)
+                graph.add_edge(left_char, right_char)#, weight=
+
+                color = s_annotator.get_color_for_marker(m)
+                lhan_rhyme = rmarker.get_rhyme_given_marker(m)
+                if not color.strip():
+                    color = default_color
+                l_title = left_char
+                r_title = right_char
+                if lhan_rhyme:
+                    l_title = left_char + '(' + lhan_rhyme + ')'
+                    r_title = right_char + '(' + lhan_rhyme + ')'
+                pyvis_net.add_node(left_char, title=l_title, label=l_title, color=color, shape='circle')
+                pyvis_net.add_node(right_char, title=r_title, label=r_title, color=color, shape='circle')
+                pyvis_net.add_edge(left_char, right_char, color=color)
+    pyvis_net.show('pyvis_sch_' + is_half + '_poem_test.html')
+                    #if not line % 2: # if this is a rhyme line
+    for line in test_lines:
+        print(line)
+    print('='*30)
+    rnet.print_out_nodes_n_edges()
+    #
+    # Vizualization
+    alt.data_transformers.disable_max_rows()
+    pos = nx.spring_layout(graph, k=0.3, iterations=20)
+    # Add attributes to each node.
+    for n in graph.nodes():
+        graph.nodes[n]['name'] = n
+
+    viz = nxa.draw_networkx(G=graph, pos=pos, node_color='group',
+                            node_label='name')  # note: , with_labels=True is for networkx, not nx_altair
+    viz = viz.properties(height=700, width=700)
+    graph_name = 'schuessler_full_poem'
+    viz.save('viz_' + graph_name + '.html')
+
+class new_edge_array:
+    def __init__(self):
+        self.edge_dict = {}
+
+    def add_edge(self, left_char, right_char, num_rhymes, rhyme_id):
+        if left_char not in self.edge_dict:
+            self.edge_dict[left_char] = {}
+        if right_char not in self.edge_dict[left_char]:
+            self.edge_dict[left_char][right_char] = []
+        if (num_rhymes, rhyme_id) not in self.edge_dict[left_char][right_char]:
+            self.edge_dict[left_char][right_char].append((num_rhymes, rhyme_id))
+
+        if right_char not in self.edge_dict:
+            self.edge_dict[right_char] = {}
+        if left_char not in self.edge_dict[right_char]:
+            self.edge_dict[right_char][left_char] = []
+        if (num_rhymes, rhyme_id) not in self.edge_dict[right_char][left_char]:
+            self.edge_dict[right_char][left_char].append((num_rhymes, rhyme_id))
+
+    def get_edge_data(self, left_char, right_char):
+        retval = []
+        if left_char in self.edge_dict:
+            if right_char in self.edge_dict[left_char]:
+                retval = self.edge_dict[left_char][right_char]
+        return retval
+
+    def get_num_edge_occurrences(self, left_char, right_char):
+        return len(self.get_edge_data(left_char, right_char))
+
+    def get_num_edges(self):
+        return len(self.edge_dict)/2.0
+
+    def print(self):
+        done_list = []
+        for lc in self.edge_dict:
+            for rc in self.edge_dict[lc]:
+                if lc + rc not in done_list:
+                    done_list.append(lc + rc)
+                if rc + lc not in done_list:
+                    print(lc + '<->' + rc)
+                    for e in self.edge_dict[lc][rc]:
+                        print('\t' + str(e))
+
+class new_node: # (rw_word, rw_pos, orig_line, line_id, '')
+    def __init__(self, rhyme_word, rw_pos, orig_line, line_id):
+        self.rhyme_word = rhyme_word
+        self.data = []
+        self.data.append((rw_pos, orig_line, line_id))
+    def add_occurrence(self, rw_pos, orig_line, line_id):
+        if (rw_pos, orig_line, line_id) not in self.data:
+            self.data.append((rw_pos, orig_line, line_id))
+    def get_occurrence_list(self):
+        return self.data
+    def get_data(self):
+        return self.data
+    def print(self):
+        for d in self.data:
+            print(d)
+
+class new_node_array:
+    def __init__(self):
+        self.array = {}
+
+    def add_node(self, rhyme_word, rw_pos, orig_line, line_id):
+        if rhyme_word not in self.array:
+            node = new_node(rhyme_word, rw_pos, orig_line, line_id)
+            self.array[rhyme_word] = node
+        else:
+            self.array[rhyme_word].add_occurrence(rw_pos, orig_line, line_id)
+
+    def add_occurrence(self, rhyme_word, rw_pos, orig_line, line_id):
+        self.add_node(rhyme_word, rw_pos, orig_line, line_id)
+
+    def get_node_data(self, rhyme_word):
+        retval = new_node('',-1, '','')
+        if rhyme_word in self.array:
+            retval = self.array[rhyme_word].get_data()
+        return retval
+
+    def print(self):
+        for rw in self.array:
+            node_data = self.array[rw].get_data()
+            node_data2 = self.get_node_data(rw)
+            for nd in node_data:
+                print(rw + ':' + str(nd))
+
+class new_rhyme_network:
+    def __init__(self):
+        self.node_array = new_node_array()
+        self.edge_array = new_edge_array()
+    def add_node(self, rhyme_word, rw_pos, orig_line, line_id):
+        self.node_array.add_node(rhyme_word, rw_pos, orig_line, line_id)
+    def get_node_data(self, rhyme_word):
+        if rhyme_word in self.node_array:
+            retval = self.node_array.get_node_data(rhyme_word)
+    def get_num_nodes(self):
+        return len(self.node_array)
+    def get_num_edges(self):
+        return len(self.edge_array.get_num_edges())
+    def add_edge(self, left_char, right_char, num_rhymes, rhyme_id):
+        self.edge_array.add_edge(left_char, right_char, num_rhymes, rhyme_id)
+    def get_edge_data(self, left_char, right_char):
+        return self.edge_array.get_edge_data(left_char, right_char)
+    def print_out_nodes_n_edges(self):
+        print('NODES:')
+        self.node_array.print()
+        print('')
+        print('EDGES:')
+        self.edge_array.print()
+
+class schuessler_stanza_annotator:
+    def __init__(self):
+        self.rmarker = rhyme_marker()  # internal
+        self.schuessler = schuessler_n_bentley()  # internal
+        self.reset()
+        self.lhan_rhyme2rw_list = {}
+        self.rw2lhan_rhyme = {}
+
+    def reset(self):
+        self.rmarker.reset_memory()
+        self.lh_fayin_dict = {}  # internal
+        self.lh_fayin_path = {}
+        self.rw2lhan_dict = {}  # internal
+        self.rw2rw_data_dict = {}
+        self.rw_missing_schuessler = []
+        self.rw_inc = 1
+        self.marker2rw_list = {}
+        self.marker2color_dict = {}
+        self.pyvis_net = Network('1000px', '1000px', heading='Schuessler Late Han', font_color='white')
+
+    def reset_longterm_data(self):
+        self.reset()
+        self.lhan_rhyme2rw_list = {}
+        self.rw2lhan_rhyme = {}
+
+    def get_long_term_rhyme_to_rw_list_data(self):
+        return self.lhan_rhyme2rw_list
+
+    def get_long_term_rw_to_rhyme_data(self):
+        return self.rw2lhan_rhyme
+
+    def add_data_to_long_term_storage(self, lhan_rhyme, rhyme_word):
+        if lhan_rhyme not in self.lhan_rhyme2rw_list:
+            self.lhan_rhyme2rw_list[lhan_rhyme] = []
+        if rhyme_word not in self.lhan_rhyme2rw_list[lhan_rhyme]:
+            self.lhan_rhyme2rw_list[lhan_rhyme].append(rhyme_word)
+        if rhyme_word not in self.rw2lhan_rhyme:
+            self.rw2lhan_rhyme[rhyme_word] = []
+        if lhan_rhyme not in self.rw2lhan_rhyme[rhyme_word]:
+            self.rw2lhan_rhyme[rhyme_word].append(lhan_rhyme)
+            if len(self.rw2lhan_rhyme[rhyme_word]) > 1:
+                print(rhyme_word + ' used for more than one rhyme: ' + ', '.join(self.rw2lhan_rhyme[rhyme_word]))
+
+    def fill_marker2rhyme_dict(self, rw_list):
+        self.rmarker.fill_marker2rhyme_dict(rw_list)
+
+    def get_marker2rhyme_dict(self):
+        return self.rmarker.get_marker2rhyme_dict()
+
+    # get marker given rhyme
+    def get_marker(self, rhyme):
+        return self.rmarker.get_marker(rhyme)
+
+    def get_default_color(self):
+        return '#80B8F0'
+    def get_color_for_marker(self, m):
+        funct_name = 'get_color_for_marker()'
+        self.get_marker2color_dict()
+        retval = self.get_default_color()
+        if m in self.marker2color_dict:
+            retval = self.marker2color_dict[m]
+        return retval
+
+    def get_marker2color_dict(self):
+        if self.marker2color_dict:
+            return self.marker2color_dict
+
+        self.get_marker2rw_list()
+        rw_list_len2marker_dict = {}
+        for m in self.marker2rw_list:
+            x = 1
+            mlen = len(self.marker2rw_list[m])
+            if mlen not in rw_list_len2marker_dict:
+                rw_list_len2marker_dict[mlen] = []
+            rw_list_len2marker_dict[mlen].append(m)
+        rw_list_lens = list(rw_list_len2marker_dict.keys())
+        rw_list_lens.sort(reverse=True)
+
+        color_list = ['#03045E', '#0077B6', '#00B4D8', '#90E0EF', '#CAF0F8']
+        color_list = ['#D7D9D7', '#C9C5CB', '#BAACBD', '#B48EAE', '#646E68']
+        #marker2color_dict = {}
+        c_inc = 0
+        for list_len in rw_list_lens:
+            m_list = rw_list_len2marker_dict[list_len]
+            for m in m_list:
+                if m not in self.marker2color_dict:
+                    if c_inc <= len(color_list) - 1:
+                        self.marker2color_dict[m] = color_list[c_inc]
+                        c_inc += 1
+        return self.marker2color_dict
+
+    def get_marker2rw_list(self):
+        if self.marker2rw_list:
+            return self.marker2rw_list
+        m2r_dict = self.rmarker.get_marker2rhyme_dict()
+        rw_list = self.get_rhyme_word_list()
+        self.get_rw2lhan_dict()
+        for m in m2r_dict:
+            if m not in self.marker2rw_list:
+                self.marker2rw_list[m] = []
+            r = m2r_dict[m]
+            for rw in rw_list:
+                lhan = self.rw2lhan_dict[rw]
+                rhyme = get_rhyme_from_schuessler_late_han_syllable(lhan)
+                if rhyme == r:
+                    self.marker2rw_list[m].append(rw)
+        return self.marker2rw_list
+
+    # PURPOSE:
+    #   to add a rhyme word to self.rw2rw_data_dict
+    def add_rhyme_word(self, rw_word, rw_pos, orig_line, line_id):
+        if any(punct in rw_word for punct in punctuation):
+            if rw_word == '}':  # '上辟彔{礻＋羽}'
+                return #NOTE: we can't use {礻＋羽}, because there wont' be any Han data for {礻＋羽}
+        if rw_word == '々':
+            rw_pos -= 1
+            rw_word = orig_line[rw_pos]
+        if self.rw_inc not in self.rw2rw_data_dict:
+            self.rw2rw_data_dict[self.rw_inc] = ''
+        try:
+            self.rw2rw_data_dict[self.rw_inc] = (rw_word, rw_pos, orig_line, line_id, '')
+            self.rw_inc += 1
+        except KeyError as ke:
+            x = 1
+        if not rw_word.strip():
+            return
+        lhan = self.schuessler.get_late_han(rw_word)
+        if not lhan:
+            if rw_word not in self.rw_missing_schuessler:
+                self.rw_missing_schuessler.append(rw_word)
+        if lhan and rw_word not in self.lh_fayin_dict:
+            self.lh_fayin_dict[rw_word] = [] # was: ''
+        self.lh_fayin_dict[rw_word] = lhan# was: ' '.join(lhan); 'lhan' is a list
+
+    def get_rhyme_word_list(self):
+        return self.lh_fayin_dict.keys()
+
+    def get_late_han_fayin(self, rhyme_word):
+        self.get_rw2lhan_dict()
+        retval = ''
+        if rhyme_word in self.rw2lhan_dict:
+            retval = self.rw2lhan_dict[rhyme_word]
+        return retval
+
+    #IMPORTANT: call after self.get_annotated_lines()
+    # PURPOSE:
+    #   calculate the rhyme xs word to Late Han dictionary (self.rw2lhan_dict):
+    # Depends on:
+    #   - self.lh_fayin_path
+    #   - self.lh_fayin_dict
+    def get_rw2lhan_dict(self):
+        keys2remove = []
+        if not self.rw2lhan_dict:
+            self.get_late_han_fayin_path()
+            kinc = 0
+            # create rw2lhan_dict (rhyme_word to late_han dictionary)
+            for ck in self.lh_fayin_dict:
+                if any(punct in ck for punct in punctuation): # was if ck == '}':
+                    if ck not in keys2remove:
+                        keys2remove.append(ck)
+                if not self.lh_fayin_dict[ck]:
+                    self.lh_fayin_dict[ck] = ['not_available']
+            for key in keys2remove:
+                del self.lh_fayin_dict[key]
+
+            # NOTE:
+            #  if self.rw2lhan_dict has N members, then self.lh_fayin_path[kinc] should have a pronunciation path with
+            #    N pronunciations
+            #  kinc should only go up to len(self.lh_fayin_path) - 1, EXCEPT that it will go to len(...) on its way
+            #                                                                out of the loop, but it shouldn't be
+            #                                                                referenced that last time
+            for ck in self.lh_fayin_dict:
+                if ck not in self.rw2lhan_dict:
+                    self.rw2lhan_dict[ck] = ''
+                try:
+                    self.rw2lhan_dict[ck] = self.lh_fayin_path[kinc]
+                except IndexError as ie:
+                    x = 1
+                try:
+                    fayin_path = self.lh_fayin_path[kinc]
+                except IndexError as ie:
+                    x = 1
+                rhyme = get_rhyme_from_schuessler_late_han_syllable(fayin_path)
+                self.add_data_to_long_term_storage(rhyme, ck)
+                kinc += 1
+        return
+    # PURPOSE:
+    #   to calculate the optimal Late Han pronunciation path, i.e., to find one that optimizes rhyming
+    # Prereqs:
+    #   self.lh_fayin_dict must be filled in before calling this function
+    def get_late_han_fayin_path(self):
+        if not self.lh_fayin_dict:
+            return {}
+        root_node = create_tree(self.lh_fayin_dict)
+        pad_list = given_root_node_get_list_of_possible_paths(root_node)
+        self.lh_fayin_path = find_path_optimized_for_rhyme(pad_list)
+        return self.lh_fayin_path
+
+    #NOTE: self.add_rhyme_word() automagically builds self.lh_fayin_dict
+    def get_late_han_fayin_dict(self):
+        return self.lh_fayin_dict
+
+    def get_late_han_used_in_current_stanza(self, rhyme_word):
+        retval = ''
+        if rhyme_word in self.rw2lhan_dict:
+            retval = self.rw2lhan_dict[rhyme_word]
+        return retval
+
+    def get_annotated_lines(self):
+        if self.rw2rw_data_dict:
+            return self.rw2rw_data_dict
+        # calculate which late han readings to use (i.e., the ones that optimize rhyming)
+        root_node = create_tree(self.lh_fayin_dict)
+        pad_list = given_root_node_get_list_of_possible_paths(root_node)
+        lh_fayin_path = find_path_optimized_for_rhyme(pad_list)
+        rw_pos = 0
+        rw_pos_pos = 1
+        orig_line_pos = 2
+        line_id_pos = 3
+        annotated_line_pos = 4
+        kinc = 0
+        missing_lhan = []
+        # create rw2lhan_dict (rhyme_word to late_han dictionary for a given stanza)
+        for ck in self.lh_fayin_dict:
+            if ck not in self.rw2lhan_dict:
+                self.rw2lhan_dict[ck] = ''
+            self.rw2lhan_dict[ck] = lh_fayin_path[kinc]
+            kinc += 1
+        #
+        # cycle back through the rhyme words updating self.rw2rw_data_dict entries
+        # self.rw2rw_data_dict[self.rw_inc].append((rw_word, rw_pos, orig_line, line_id, ''))
+        # NOTE: the same rhyme word may have multiple occurrences
+        for rw_inc in self.rw2rw_data_dict:
+            msg_out = ''
+            #rw = self.rw2rw_data_dict[rw_inc][rw_pos]
+            #if len(self.rw2rw_data_dict[rw_inc]) > 1:
+            #    x = 1
+            rw_data = self.rw2rw_data_dict[rw_inc]
+            rw = rw_data[0]
+            # if there is no rhyme word, then just use the original line as the output line
+            if not rw.strip():
+                orig_line = rw_data[orig_line_pos]
+                self.rw2rw_data_dict[rw_inc] = (rw, rw_data[1], orig_line, rw_data[3], orig_line + '。')
+                continue
+            lhan = self.rw2lhan_dict[rw]
+            orig_line = rw_data[orig_line_pos]
+            rw_pos = rw_data[rw_pos_pos]
+            if lhan:
+                rhyme = get_rhyme_from_schuessler_late_han_syllable(lhan)
+                marker = self.rmarker.get_marker(rhyme)
+                # (rw_pos, orig_line, line_id, '')
+                new_line = insert_rhyme_marker_at_pos(orig_line, rw_pos, marker + '(' + rhyme + ')')
+                msg_out = new_line + '。'
+                self.rw2rw_data_dict[rw_inc] = (rw, rw_pos, orig_line, rw_data[3], msg_out)
+            else:  # if there is no LHan data, just write out original line
+                missing_lhan.append(rw)
+                self.rw2rw_data_dict[rw_inc] = (rw, rw_pos, orig_line, rw_data[3], orig_line + '。')
+        if missing_lhan:
+            print('Missing Late Han data: ' + ''.join(missing_lhan))
+        return self.rw2rw_data_dict
+
+def test_readin_network_in_pajek_format_and_return_pyvis_network():
+    funct_name = 'test_readin_network_in_pajek_format_and_return_pyvis_network()'
+    input_file = os.path.join(get_hanproj_dir(), 'received-shi', 'nodes_n_edges_annotated_received_shi_pre_com_det.txt')
+
+    heading = 'Pre-Community Detection Received Shi'
+    min_node_weight = 1 # don't print nodes with a node weight of less than this
+    only_print_these_nodes = []
+    readin_network_in_pajek_format_and_return_pyvis_network(input_file, heading, min_node_weight, only_print_these_nodes)
+
+def readin_network_in_pajek_format_and_return_pyvis_network(input_file,
+                                                           network_heading,
+                                                           min_node_weight,
+                                                           color_these_nodes,
+                                                           is_verbose=False):
+    funct_name = 'readin_network_in_pajek_format_and_return_pyvis_network()'
+    if not os.path.isfile(input_file):
+        print(funct_name + ' ERROR: invalid input file: ' + input_file)
+        print('\tAborting.')
+        return
+    line_list = readlines_of_utf8_file(input_file)
+    line_list = line_list[1:len(line_list)]  # skip first line
+    num_nodes = int(line_list[0].replace('*Vertices in ', ''))
+    line_list = line_list[1:len(line_list)]  # skip second line
+    node_id2rw_n_weight = {}
+    chars2edge_weight = {}
+    readin_edges = False
+    pyvis_network = generate_pyvis_network(heading=network_heading)
+    nodes_not_to_add = []
+    for ll in line_list:
+        if '*Edges ' in ll:
+            num_edges = ll.replace('*Edges ', '')
+            num_edges = int(num_edges.replace('.0',''))
+            readin_edges = True
+            continue
+        ll = ll.split(' ')
+        #
+        # Process NODES
+        if not readin_edges:
+            node_num = ll[0]
+            rhyme_word = ll[1].replace('"', '')
+            node_weight = ll[2]
+            if node_num not in node_id2rw_n_weight:
+                node_id2rw_n_weight[node_num] = (rhyme_word, node_weight)
+            if is_verbose:
+                print('NODE: ' + node_num + ', ' + rhyme_word + ', ' + node_weight)
+        else:
+            #
+            # Process EDGES
+            left_char = ll[0]
+            right_char = ll[1]
+            edge_weight = ll[2]
+            if left_char not in chars2edge_weight:
+                chars2edge_weight[left_char] = {}
+            if right_char not in chars2edge_weight[left_char]:
+                chars2edge_weight[left_char][right_char] = ''
+            chars2edge_weight[left_char][right_char] = edge_weight
+            if is_verbose:
+                print('EDGE: ' + left_char + ', ' + right_char + ', ' + edge_weight)
+    #
+    # Add NODES to network
+    rw_pos = 0
+    weight_pos = 1
+    for node_id in node_id2rw_n_weight:
+        rhyme_char = node_id2rw_n_weight[node_id][rw_pos]
+        n_weight = node_id2rw_n_weight[node_id][weight_pos]
+        if min_node_weight > 0: # a -1 means "don't use min node weight"
+            if int(n_weight) < min_node_weight:
+                nodes_not_to_add.append(rhyme_char)
+                continue
+        print('pyvis_net.add_node(' + rhyme_char + ', label=' + rhyme_char + ', weight = ' +  n_weight)
+        if rhyme_char in color_these_nodes:
+            color = '#550C18'
+        else:
+            color = '#80B8F0' # default color
+        pyvis_network.add_node(rhyme_char, label=rhyme_char, weight=n_weight, color=color, shape='circle', value=n_weight)
+    #
+    # Add EDGES to network
+    for left_char_id in chars2edge_weight:
+        left_char = node_id2rw_n_weight[left_char_id][rw_pos]
+        for right_char_id in chars2edge_weight[left_char_id]:
+            right_char = node_id2rw_n_weight[right_char_id][rw_pos]
+            e_weight = chars2edge_weight[left_char_id][right_char_id]
+            if left_char in nodes_not_to_add or right_char in nodes_not_to_add:
+                continue
+            print('pyvis_net.add_edge(' + left_char + ', ' + right_char + ', weight=' + e_weight)
+            pyvis_network.add_edge(left_char, right_char, weight=e_weight)
+
+    network_heading = 'pyvis_' + network_heading.replace(' ', '_') + '.html'
+    pyvis_network.show(network_heading)
+    print('Num nodes = ' + str(num_nodes) + ', num edges = ' + str(num_edges))
+
+def generate_pyvis_network(heading):
+    pyvis_net = Network('1000px', '1000px', heading=heading, font_color='white')
+    options = 'var options = {  "edges": {    "color": {      "inherit": "to"    },    "smooth": false  },  "physics": {    "minVelocity": 0.75  }}'
+    pyvis_net.set_options(options)
+    return pyvis_net
+
+def test_data_storage_and_redisplay():
+    funct_name = 'test_data_storage_and_redisplay()'
+    is_verbose = True
+    print_debug_msgs = True
+    message2user('Starting multi_dataset_processor()...', is_verbose)
+    processor = multi_dataset_processor(is_verbose)
+    processor.do_not_reprocess_old_data()
+    message2user('Done.', is_verbose)
+    network_type = 'network' # or 'graph'
+    annotator_type = 'naive'
+    data_type = 'received_shi'
+    processor.create_network_from_file_data(network_type, annotator_type, data_type)
+
+def which_chars_are_missing_lhan_data(chars):
+    glyph2late_han = readin_most_complete_schuessler_data()
+    retval = []
+    for c in chars:
+        try:
+            lhan = glyph2late_han[c]
+        except:
+            if c not in retval:
+                retval.append(c)
+    return retval
+
+def test_list_of_chars_for_lhan_data():
+    char_list = '鳳蕭子了爵亞軌蹤繼頌心性術度爾滓厄記遠載騰布職計部上年節操廉中長靡下治擾稷首就舉'
+    char_list = list(set(char_list))
+    missing = which_chars_are_missing_lhan_data(char_list)
+    print('')
+    if missing:
+        print('These chars are missing LHan data:')
+        print('\t' + ''.join(missing))
+    else:
+        print('No chars in list missing LHan data.')
+
+sinput = ['聲', '生']
+#test_get_schuessler_late_han_for_glyph(sinput)
 #test_get_schuessler_late_han_for_glyph(['清','名', '生', '盈', '成', '聽'])#['光','明'])#['里','海','何'])#['門','山'])
 
-#clean_up_mou_n_zhong_2016_data() # bronzes
-#print_lu1983_dict()
-#readin_lu_1983_data()
-
-#parse_han_data_from_lu_1983()
-
-#get_list_of_author_names_from_lu_1983()
-
-#readin_raw_han_poetry()
-#test_get_arabic_num_given_chinese_num()
-#test_chinese_converter()
-
-
-#naively_annotate_mao_2008_stelae_data()
-
-#readin_kyomeishusei2015_han_mirror_data()
-#edit_kyomeishusei2015_han_mirror_data()
-#test_get_schuessler_plus_bentley_2015()
-
-#parse_bentley_2015()
-#get_parsed_bentley_2015_late_han_data()
-#create_schuessler_late_han_data_file()
-#readin_preparsed_schuessler_late_han_data()
-#create_schuessler_plus_bentley_2015_file()
-#readin_schuessler2007_n_bentley2015_combo()
-
-#analyze_schuessler_n_bentley_later_han()
-
-# TO DO
-#  - check how processor.process_mao_2008_stelae_data()
-#   is handling '：'
-#  - check output for 六〇：《景君碑》，東漢漢安二年（143）八月，p136
-#readin_mao_2008_stelae_data()
-
 test_multi_dataset_processor() #-----
+#test_list_of_chars_for_lhan_data()
 
-#test_annotate_stele_inscription()

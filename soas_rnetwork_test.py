@@ -15,9 +15,10 @@
 #    get_soas_data_dir()
 #    get_mattis_github_data_dir()
 #    get_wang1980_data_dir()
-
+from __future__ import unicode_literals, print_function
 import os
 import codecs
+from simple_colors import *
 from soas_imported_from_py3 import readlines_of_utf8_file
 from poepy import Poems
 import networkx as nx
@@ -25,12 +26,30 @@ from soas_imported_from_py3 import append_line_to_utf8_file
 import datetime
 from soas_imported_from_py3 import is_kana_letter
 from soas_imported_from_py3 import get_mc_data_for_char
+from soas_network_utils import rhyme_color_tracker
+#from soas_network_utils import readin_results_of_community_detection
+from soas_network_utils import readin_community_detection_group_descriptions
+from soas_network_utils import get_late_han_rhyme_for_glyph
+from soas_network_utils import group2color
+from soas_network_utils import readin_community_detection_group_descriptions
+#from soas_network_utils import get_com_det_group_descriptions_for_combo_data
+from soas_network_utils import if_file_exists
+
+from networkx.drawing.nx_agraph import write_dot, graphviz_layout
 import time
+from pyvis.network import Network
+from pyvis.options import EdgeOptions
+from matplotlib import pyplot as plt
+
 #globals
 b92_label_dict = {}
 b92_shijing_dict = {}
 sj_num2name_dict = {}
 sj_line2poem_dict = {}
+
+def delete_file_if_it_exists(filename):
+    if os.path.isfile(filename):
+        os.remove(filename)
 
 def get_hanproj_dir():
     return os.path.join('D:' + os.sep + 'Ash', 'SOAS', 'code', 'hanproj')
@@ -307,10 +326,209 @@ def let_this_char_become_node(zi):
 
 
 class rnetwork: # rhyme network
-    def __init__(self):
+    def __init__(self, variable_name):
+        self.class_name = 'rnetwork'
+        self.variable_name = variable_name
         self.node_dict = {}
         self.same_zi_multi_rhyme_cnt = 0 # Number of times the same characters rhyme more than once in the same stanza
                                          # over the whole Shijing
+        self.color_store = rhyme_color_tracker()
+
+    def get_most_commonly_rhymed_n_characters(self, n):
+        funct_name = 'get_most_commonly_rhymed_n_characters()'
+        n = int(n)
+        node_list = self.get_node_list()
+        weight2node_dict = {}
+        max_weight = -1
+        for rw in node_list:
+            node = self.node_dict[rw]
+            node_weight = node.get_node_weight()
+            if node_weight not in weight2node_dict:
+                weight2node_dict[node_weight] = []
+            weight2node_dict[node_weight].append(rw)
+            if node_weight > max_weight:
+                max_weight = node_weight
+        #for w in weight2node_dict:
+        retval = {}
+        inc = 0
+        zi_added = 0
+        for w in range(max_weight, 1, -1):
+            try:
+                print(str(w) + ':\n' + ''.join(weight2node_dict[w]))
+                inc += 1
+                if w not in retval:
+                    retval[w] = []
+                for rw in weight2node_dict[w]:
+                    if zi_added < n:
+                        retval[w].append(rw)
+                        zi_added += 1
+            except IndexError as ie:
+                x = 1
+#                if inc >= n:
+#                    break
+            except KeyError as ke:
+                x = 1
+#                if inc >= n:
+#                    break
+        return retval
+
+    def create_pyvis_network_graph_of_n_most_rhymed_zi(self, heading, n, add_com_det=True, add_weighting=True):
+        funct_name = 'create_pyvis_network_graph_of_n_most_rhymed_zi()'
+        pyvis_net = Network('1000px', '1000px', heading=heading, font_color='white')
+        options = 'var options = {  "edges": {    "color": {      "inherit": "to"    },    "smooth": false  },  "physics": {    "minVelocity": 0.75  }}'
+        pyvis_net.set_options(options)
+        output_file = os.path.join(get_hanproj_dir(), 'n_most_common_received_shi_data.txt')
+        delete_file_if_it_exists(output_file)
+        n_most_rhymed_rw = self.get_most_commonly_rhymed_n_characters(n)
+        if add_com_det:
+            com_det_file = get_com_det_group_descriptions_for_combo_data()
+            if not os.path.isfile(com_det_file):
+                print_debug_message(funct_name + ' ERROR: Community Detection Results file does NOT exist.', True)
+                print_debug_message('\tRun combo community detection before running this function.')
+                return
+            desired_groups = []
+            rw2group_dict, group2rw_list = readin_community_detection_group_descriptions(com_det_file, desired_groups)
+            g2c = group2color()
+
+        pool_of_chars = []
+        color_group_nums = {}
+        for nweight in n_most_rhymed_rw:
+            pool_of_chars += n_most_rhymed_rw[nweight]
+        append_line_to_utf8_file(output_file, ''.join(pool_of_chars))
+        #
+        # add all nodes first
+        for nweight in n_most_rhymed_rw:
+            for rw in n_most_rhymed_rw[nweight]:
+                node = self.node_dict[rw]
+                node_weight = nweight
+                rw = node.get_zi()
+                if add_com_det:
+                    if rw in rw2group_dict:
+                        group_info = rw2group_dict[rw][0]
+                        g_num = group_info[0]
+                        color_group_nums[rw] = g_num
+                    else:
+                        color_group_nums[rw] = 5000
+                        g_num = 5000
+
+                    color = g2c.given_group_num_get_color(g_num)
+
+                if add_weighting:
+                    if not add_com_det:
+                        pyvis_net.add_node(rw, label=rw, title=rw, value=node_weight, shape='circle')
+                    else:
+                        pyvis_net.add_node(rw, label=rw, title=rw, value=node_weight, shape='circle', color=color)
+                else:
+                    if not add_com_det:
+                        pyvis_net.add_node(rw, label=rw, title=rw, shape='circle')
+                    else:
+                        pyvis_net.add_node(rw, label=rw, title=rw, shape='circle', color=color)
+                append_line_to_utf8_file(output_file, rw + '\t' + str(node_weight))
+        #
+        # add edges
+        for nweight in n_most_rhymed_rw:
+            for rw in n_most_rhymed_rw[nweight]:
+                node = self.node_dict[rw]
+                rw = node.get_zi()
+                edge_list = self.get_edge_list_for_node(rw)
+                for e in edge_list:
+                    node_a = e[0]
+                    node_b = e[1]
+                    other = e[2]
+                    if node_a in pool_of_chars and node_b in pool_of_chars:
+                        edge_weight = self.get_edge_weight(node_a, node_b)
+                        if add_weighting:
+                            pyvis_net.add_edge(node_a, node_b, value=edge_weight)
+                        else:
+                            pyvis_net.add_edge(node_a, node_b)  # , value=edge_weight)
+                        append_line_to_utf8_file(output_file, node_a + '\t' + node_b + '\t' + str(edge_weight))
+        heading = heading.replace(' ','_')
+        print('')
+        #color_group_nums = [str(x) for x in color_group_nums]
+        msg = ''
+        for rw in color_group_nums:
+            msg += rw + ' (' + str(color_group_nums[rw]) + '), '
+        msg = msg[0:len(msg)-2]
+        print(msg)
+        #print('color group numbers:\n' + ', '.join(color_group_nums))
+        pyvis_net.show(heading + '_n_most_rhymed.html')
+
+    def create_pyvis_network_graph(self, heading):
+        funct_name = 'create_pyvis_network_graph()'
+        pvis_net = Network('1000px', '1000px', heading=heading, font_color='white')
+        options = 'var options = {  "edges": {    "color": {      "inherit": "to"    },    "smooth": false  },  "physics": {    "minVelocity": 0.75  }}'
+        pvis_net.set_options(options)
+        #
+        # Process Nodes
+        node_list = self.get_node_list()
+        nodes_not_to_add = []
+        for n in node_list:
+            node = self.node_dict[n]
+            node_weight = node.get_node_weight()
+            rw = node.get_zi()
+            pvis_net.add_node(rw, label=rw, title=rw, value=node_weight, shape='circle')
+        #
+        # Process Edges
+        unique_edge_list = self.get_unique_edge_list() # returns list of tuples, like: <class 'tuple'>: ('鄉', '王')
+        for e in unique_edge_list:
+            if nodes_not_to_add:
+                if e[0] in nodes_not_to_add or e[1] in nodes_not_to_add:
+                    continue
+            weight = self.get_edge_weight(e[0], e[1])
+            pvis_net.add_edge(e[0], e[1], value=weight)
+        pvis_net.show(heading.replace(' ', '-') + '.html')
+
+
+    def create_pyvis_network_graph_for_community_detected_data(self, heading, com_det_file, desired_groups=[]):
+        funct_name = 'create_pyvis_network_graph_for_community_detected_data()'
+        rw2group_dict, group2rw_list = readin_community_detection_group_descriptions(com_det_file)
+        if not rw2group_dict and not group2rw_list:
+            print(funct_name + ' ERROR: no community detection results to work with!')
+            print('\tAborting.')
+            return
+        #
+        # TO DO:
+        # this function is to be called AFTER ALL edge and node data have been collected
+        pvis_net = Network('1000px', '1000px', heading=heading, font_color='white')
+        options = 'var options = {  "edges": {    "color": {      "inherit": "to"    },    "smooth": false  },  "physics": {    "minVelocity": 0.75  }}'
+        pvis_net.set_options(options)
+
+        node_list = self.get_node_list()
+        #self.color_store.get_color_given_rhyme()
+        #get_ #get_late_han_rhyme_for_glyph()
+        #self.color_store.
+        nodes_not_to_add = []
+        for n in node_list:
+            node = self.node_dict[n]
+            node_weight = node.get_node_weight()
+            rw = node.get_zi()
+            group_num = -1
+            if rw in rw2group_dict:
+                group_num = rw2group_dict[rw]
+                group_num = group_num[0][0]
+                node.assign_to_group(group_num)
+                color = node.get_group_color(group_num)
+            else:
+                color = node.get_group_color(-1) # returns default color
+            #lh_rhyme = get_late_han_rhyme_for_glyph(rw)
+            if desired_groups and group_num > 0:
+                if int(group_num) not in desired_groups:
+                    nodes_not_to_add.append(rw)
+                    continue
+            pvis_net.add_node(rw, label=rw, title=str(group_num), color=color, value=node_weight, shape='circle')
+
+        unique_edge_list = self.get_unique_edge_list() # returns list of tuples, like: <class 'tuple'>: ('鄉', '王')
+        for e in unique_edge_list:
+            if nodes_not_to_add:
+                if e[0] in nodes_not_to_add or e[1] in nodes_not_to_add:
+                    continue
+            edge_weight = self.get_edge_weight(e[0], e[1])
+            pvis_net.add_edge(e[0], e[1], value=edge_weight)
+
+        h, t = os.path.split(com_det_file)
+        base_filename, ext = os.path.splitext(t)
+        pvis_net.show(base_filename + '.html')
+
     def get_unique_edge_list(self):
         retval = []
         master_dict = {}
@@ -336,7 +554,7 @@ class rnetwork: # rhyme network
             retval = self.node_dict[zi].get_node_weight()
         return retval
 
-    def add_node(self, zi, poem_stanza_num, raw_line):
+    def add_node(self, zi, poem_stanza_num, raw_line, late_han_rhyme=''):
         if zi.isdigit():
             return
         if is_kana_letter(zi):
@@ -344,24 +562,34 @@ class rnetwork: # rhyme network
         zi = remove_unwanted_chars_from_str(zi)
         if not zi.strip():
             return
+        if late_han_rhyme:
+            zi = zi + ' (' + late_han_rhyme + ')'
         if zi in self.node_dict:
             self.node_dict[zi].increment_node_weight()
             self.node_dict[zi].add_an_occurrence(poem_stanza_num)
             return
         if zi not in self.node_dict:
             self.node_dict[zi] = rnode(zi, poem_stanza_num, raw_line)
+            self.color_store.add_rhyme_word(zi)
 
-    def add_edge(self, first_rhyme_word, sec_rhyme_word, num_rhymes_in_stanza, poem_stanza_num, enforce_ending_similarity=True):
+    def add_edge(self, first_rhyme_word, sec_rhyme_word, num_rhymes_in_stanza, poem_stanza_num, debug_msg=''):
         #NOTE: could change this so that it just adds the NODEs, but they're supposed to be there already
         is_verbose = False
+        if first_rhyme_word == sec_rhyme_word:
+            return
         if not first_rhyme_word.strip() or not sec_rhyme_word.strip():
             return
 
         if first_rhyme_word not in self.node_dict:
-            print('rnetwork::add_edge() ERROR: ' + first_rhyme_word + ' NOT in network!')
+            print(self.variable_name + '::rnetwork::add_edge() ERROR: ' + first_rhyme_word + ' NOT in network!')
+            m = first_rhyme_word + ' & ' + sec_rhyme_word + '(' + str(num_rhymes_in_stanza) + ' rhymes in stanza #'
+            m += str(poem_stanza_num) + ')'
+            if debug_msg:
+                m += ' debug_msg = ' + debug_msg
+            print('\t' + m)
             return
         elif sec_rhyme_word not in self.node_dict:
-            print('rnetwork::add_edge() ERROR: ' + sec_rhyme_word + ' NOT in network!')
+            print(self.variable_name + 'rnetwork::add_edge() ERROR: ' + sec_rhyme_word + ' NOT in network!')
             return
         # NODE::add_edge(self, zi_b, num_rhymes_in_stanza, poem_stanza_num):
         one_repeat = self.node_dict[first_rhyme_word].add_edge(sec_rhyme_word, num_rhymes_in_stanza, poem_stanza_num)
@@ -419,6 +647,37 @@ class rnetwork: # rhyme network
             retval += node_data
         return retval
 
+
+    def output_rnetwork_to_file(self, filename, is_verbose=False):
+        funct_name = 'output_rnetwork_to_file()'
+        data = self.print_all_nodes_n_edges(False)
+        delete_file_if_it_exists(filename)
+        for d in data:
+            append_line_to_utf8_file(filename, d)
+
+    def readin_rnetwork_from_file(self, filename, is_verbose=False):
+        funct_name = 'readin_rnetwork_from_file()'
+        if not if_file_exists(filename, funct_name):
+            return ''
+        retval = rnetwork('from_file')
+        data = readlines_of_utf8_file(filename)
+        for d in data:
+            d = d.split('\t')
+            # Node=里	5	42
+            # 里	海	0.3333333333333333	Lu1983.002.1
+            if 'Node=' in d[0]: # parse Node data - msg = 'Node=' + self.zi + '\t' + str(self.cnt_num_unique_stanzas()) + '\t' + str(self.get_node_weight())
+              node = d[0].replace('Node=','')
+              #retval.add_node()
+            else: # parse Edge data
+                left_char = d[0]
+                right_char = d[1]
+                e_weight = d[2]
+                stanza_id = d[3]
+
+
+
+
+
     def get_node_dict(self):
         return self.node_dict
 
@@ -456,7 +715,7 @@ class rnetwork: # rhyme network
         print('\tDone.')
         return retval
 
-    def get_infomap_linked_list_of_rhyme_network(self, filename_base='', print_data=False):
+    def get_infomap_linked_list_of_rhyme_network(self, filename_base='', print2file=False):
         funct_name = 'get_infomap_linked_list_of_rhyme_network()'
         msg = 'Entering ' + funct_name
         if filename_base:
@@ -465,25 +724,27 @@ class rnetwork: # rhyme network
         start_time = time.time()
         network_data = self.print_all_nodes_n_edges(is_verbose=False)
         retval = nx.Graph()
-        current_node = ''
-        id2edge_dict = {}
+        #current_node = ''
+        #id2edge_dict = {}
         node_inc = 0
         output_file = 'nodes_n_edges_'
         if filename_base:
             output_file += filename_base + '_'
-        output_file += get_timestamp_for_filename() + '.txt'
+        #output_file += get_timestamp_for_filename() + '.txt'
+        output_file += '.txt'
         if os.path.isfile(output_file):
             os.remove(output_file)
         if 'stelae' in output_file:
             output_file = os.path.join(get_hanproj_dir(), 'stelae', output_file)
-        elif 'mirror' in output_file:
+        elif 'mirrors' in output_file:
             output_file = os.path.join(get_hanproj_dir(), 'mirrors', output_file)
         elif 'received' in output_file:
             output_file = os.path.join(get_hanproj_dir(), 'received-shi', output_file)
         elif 'combo' in output_file:
             output_file = os.path.join(get_hanproj_dir(), output_file)
-        append_line_to_utf8_file(output_file, '# A network in Pajek format')
-        append_line_to_utf8_file(output_file, '*Vertices in ' + str(self.get_num_nodes()))
+        if print2file:
+            append_line_to_utf8_file(output_file, '# A network in Pajek format')
+            append_line_to_utf8_file(output_file, '*Vertices in ' + str(self.get_num_nodes()))
         print('# A network in Pajek format')
         print('*Vertices in ' + str(self.get_num_nodes()))
         zi2node_dict = {}
@@ -495,12 +756,14 @@ class rnetwork: # rhyme network
                 pmsg = str(node_inc) + ' "' + node + '" ' + str(node_weight)
                 if 0:
                     print(pmsg)
-                append_line_to_utf8_file(output_file, pmsg)
+                if print2file:
+                    append_line_to_utf8_file(output_file, pmsg)
                 if node not in zi2node_dict:
                     zi2node_dict[node] = 0
                 zi2node_dict[node] = node_inc
         print('*Edges ' + str(self.get_num_edges()))
-        append_line_to_utf8_file(output_file, '*Edges ' + str(self.get_num_edges()))
+        if print2file:
+            append_line_to_utf8_file(output_file, '*Edges ' + str(self.get_num_edges()))
         for nd in network_data:
             if 'Node=' not in nd:
                 nd = nd.split('\t')
@@ -511,7 +774,8 @@ class rnetwork: # rhyme network
                 if 0:
                     print(str(zi2node_dict[zi_a]) + ' ' + str(zi2node_dict[zi_b]) + str(edge_weight))
                 msg_out = str(zi2node_dict[zi_a]) + ' ' + str(zi2node_dict[zi_b]) + ' ' + str(edge_weight)
-                append_line_to_utf8_file(output_file, msg_out)
+                if print2file:
+                    append_line_to_utf8_file(output_file, msg_out)
         print('\tDone.')
         end_time = time.time()
         print('\tElapsed time: ' + "%0.2f" % (end_time - start_time))
@@ -519,7 +783,7 @@ class rnetwork: # rhyme network
 
 def remove_unwanted_chars_from_str(tstr):
     unwanted_chars = [')','>','｛','？',']','「','”','）','■','；','：','\'','、','」', '･', '＊','×','?', '○','】','‐', '］',
-                      '＝','●','々', 'e', ':','』','〕','Ⅱ', '!', '！']
+                      '＝','●','々', 'e', ':','』','〕','Ⅱ', '!', '！', '》', '〗', '}', '☒']
     #if any(uc in tstr for uc in unwanted_chars):
     for c in unwanted_chars:
         if c in tstr:
@@ -528,6 +792,9 @@ def remove_unwanted_chars_from_str(tstr):
 
 def get_timestamp_for_filename():
     return datetime.datetime.now().strftime("%A_%d_%B_%Y_%I_%M%p")
+
+def calculate_edge_weight_given_num_rhymes(num_rhymes_in_stanza):
+    return float(1.0 / (float(num_rhymes_in_stanza) - 1.0))
 
 class rnode: # rhyme node
     # NOTE: 'poem_stanza_num' should actually be in the form '1.2a'
@@ -543,15 +810,36 @@ class rnode: # rhyme node
         self.occurrences = []
         self.edge_dict = {} # key = {char_b}; value = ({Wab}, {# for poem & stanza + rhyme type})
         #
+        self.group_num = -1
         self.raw_line = raw_line
         self.add_an_occurrence(raw_line)
         self.add_oc()
         self.add_mc()
+        self.group_colors = ['#14281D', '#355834', '#6E633D', '#C2A878', '#F1F5F2', '#550C18','#443730', '#786425',
+                             '#A5907E', '#F7DAD9']
+        self.default_color = '#80B8F0'
 
+    def get_zi(self):
+        return self.zi
     def get_node_weight(self):
         return self.get_num_edges()
         #return self.cnt_num_unique_stanzas()
         #return self.zi_weight
+
+    def assign_to_group(self, group_num):
+        self.group_num = group_num
+
+    def get_group_color(self, group_num):
+        retval = self.default_color
+        group_num = int(group_num)
+        if group_num == -1:
+            return retval
+        group_num -= 1 # convert 1->N group num to 0->N-1 to match array indexing
+        # group_num : 1 -> N
+        # self.group_colors: 0 -> N-1
+        if group_num <= len(self.group_colors)-1:
+            retval = self.group_colors[group_num]
+        return retval
 
     def increment_node_weight(self):
         self.zi_weight += 1
@@ -633,7 +921,8 @@ class rnode: # rhyme node
             self.occurrences.append(raw_line)
 
     def calculate_edge_weight(self, num_rhymes_in_stanza):
-        return 1.0/(num_rhymes_in_stanza - 1.0)
+        return calculate_edge_weight_given_num_rhymes(num_rhymes_in_stanza)
+        #return 1.0/(num_rhymes_in_stanza - 1.0)
 
     # NOTE: this 'poem_stanza_num' is the one relevant to this EDGE
     #       May not be the same as the 'poem_stanza_num' used to create the NODE
@@ -651,7 +940,7 @@ class rnode: # rhyme node
             for tp in self.edge_dict[zi_b]:
                 if tp[1] == poem_stanza_num: # if zi_a and zi_b have already rhymed once in this stanza, then
                                              # don't count them again
-                    print('Zi_a & zi_b rhyme more than once in the same stanza (' + poem_stanza_num + ')')
+                    print(self.zi + ' & ' + zi_b + ' rhyme more than once in the same stanza (' + poem_stanza_num + ')')
                     return 1
         W_ab = self.calculate_edge_weight(num_rhymes_in_stanza)
         self.edge_dict[zi_b].append((W_ab, poem_stanza_num))
@@ -673,6 +962,7 @@ class rnode: # rhyme node
         pmsg = 'Node = ' + self.zi + ' [ # unique stanzas = ' + str(self.cnt_num_unique_stanzas()) + '; weight = '
         pmsg += str(self.get_node_weight()) + ']'
         msg = 'Node=' + self.zi + '\t' + str(self.cnt_num_unique_stanzas()) + '\t' + str(self.get_node_weight())
+        #msg = 'Node=' + self.zi + '\t' +
         edge_list = self.print_edges(is_verbose)
         edge_list.insert(0, msg) # add node data to beginning of list
         return edge_list
@@ -1884,18 +2174,191 @@ def have_compatible_yunwei(zi_a, zi_b, is_verbose=False):
 
     return retval
 
+def test_create_pyvis_network_graph_of_n_most_rhymed_zi_from_file():
+    funct_name = 'test_create_pyvis_network_graph_of_n_most_rhymed_zi_from_file()'
+    heading = 'Received Shi Com Det'
+    create_pyvis_network_graph_of_n_most_rhymed_zi_from_file(heading)
 
-        #x = 1
+def make_text_bold(text):
+    return text
+    #return green(text, 'bold')
+    #return '<b>' + text + '</b>'
+    #return '\033[1m' + text + '\033[0m'
+
+def create_pyvis_network_graph_of_n_most_rhymed_zi_from_file(heading):
+    funct_name = 'create_pyvis_network_graph_of_n_most_rhymed_zi_from_file()'
+    plot_with_networkx = False
+    plot_with_pyvis = True
+    if plot_with_networkx:
+        G = nx.Graph()
+        #plt.rcParams["figure.figsize"] = [7.50, 3.50]
+        #plt.rcParams["figure.autolayout"] = True
+    if plot_with_pyvis:
+        pvis_net = Network(height='1000px', width='1000px', heading=heading, font_color="white")
+        pvis_net.barnes_hut(gravity=-80000, central_gravity=0.3)
+        pvis_net.force_atlas_2based()
+        options = 'var options = {  "edges": {    "color": {      "inherit": "to"    },    "smooth": false  },  "physics": {    "minVelocity": 0.75  }}'
+        pvis_net.set_options(options)
+    color_db = group2color()
+    input_file = os.path.join(get_hanproj_dir(), 'n_most_common_received_shi_data.txt')
+    file_data = readlines_of_utf8_file(input_file)
+    n_most_rhymed_rw = file_data[0]#self.get_most_commonly_rhymed_n_characters(n)
+    pool_of_chars = file_data[0]
+    file_data = file_data[1:len(file_data)]
+    com_det_file = os.path.join(get_hanproject_dir(),'com_detection_combined_data_output.txt')
+    rw2group_dict, group2rw_list = readin_community_detection_group_descriptions(com_det_file)
+    #rw2group_dict[rhyme_word].append((group_id, node_weight, orig_node_id))
+    light_grey = '#ababab'#'#e9e9e9'
+    for line in file_data:
+        line = line.split('\t')
+        if len(line) == 2: # Node
+            rw = line[0]
+            if rw in rw2group_dict:
+                group_num = rw2group_dict[rw][0][0]
+                orig_id = int(rw2group_dict[rw][0][2])
+                #group_num = group_num[0]
+            else:
+                group_num = -1
+                orig_id = -1
+            color = color_db.given_group_num_get_color(group_num)
+            nweight = int(line[1])
+            if plot_with_pyvis:
+                rw_label = make_text_bold(rw)
+                #print('regular: ' + rw + ', bold: ' + rw_label)
+                pvis_net.add_node(rw, label=rw_label, title=group_num, value=nweight, color=color, shape="circle", font="simsum bold")
+            if plot_with_networkx:
+                G.add_node(orig_id, label=rw, node_size=nweight, node_color=color, shape="circle")
+        elif len(line) == 3: # Edge
+            zi_a = line[0]
+            zi_b = line[1]
+            eweight = line[2]
+            if plot_with_pyvis:
+                pvis_net.add_edge(zi_a, zi_b, color=light_grey)#, value=eweight)
+            if plot_with_networkx:
+                if zi_a in rw2group_dict:
+                    orig_id_a = int(rw2group_dict[zi_a][0][2])
+                if zi_b in rw2group_dict:
+                    orig_id_b = int(rw2group_dict[zi_b][0][2])
+                G.add_edge(orig_id_a, orig_id_b)#, weight='')#, weight=eweight)
+    #pvis_net.show_buttons()#filter_= ['physics'])#['nodes', 'edges', 'physics'])
+    if plot_with_pyvis:
+        pvis_net.show(heading + '_n_most_rhymed.html')
+    if plot_with_networkx:
+        nt = Network('1000px', '1000px')
+        nt.from_nx(G)
+        pos = graphviz_layout(G, prog='dot')
+        node_labels = nx.get_node_attributes(G, 'label')
+        nt.draw(G, with_labels=True)
+        nx.draw_networkx_labels(G, pos, node_labels, font_family='simsum', font_color='white', font_weight='bold')
+        #nx.draw(G, with_labels=True, node_size=100, alpha=1, linewidths=10)
+        #plt.show()
+        nt.show('networkx_test.html')
+
+
+#                        schuessler = ''
+def two_char_network(zi_a, zi_b):
+    heading = 'blah blah'#zi_a + ' & ' + zi_b
+    pvis_net = Network(height='1000px', width='1000px', heading=heading, font_color="white")
+    # pvis_net.barnes_hut()
+    pvis_net.force_atlas_2based()
+    options = 'var options = {  "edges": {    "color": {      "inherit": "to"    },    "smooth": false  },  "physics": {    "minVelocity": 0.75  }}'
+    pvis_net.set_options(options)
+    color='#c8ccca'
+    pvis_net.add_node(zi_a, label=zi_a, value=1, shape="circle")#, color=color)
+    pvis_net.add_node(zi_b, label=zi_b, value=1, shape="circle")#, color=color)
+    pvis_net.add_edge(zi_a, zi_b)
+    pvis_net.show('two_char_network.html')
+
+def a_few_poem_network():
+    heading = 'blah blah'#zi_a + ' & ' + zi_b
+    pvis_net = Network(height='1000px', width='1000px', heading=heading, font_color="white")
+    #pvis_net.barnes_hut()
+    # pvis_net.barnes_hut()
+    pvis_net.force_atlas_2based()
+    options = 'var options = {  "edges": {    "color": {      "inherit": "to"    },    "smooth": false  },  "physics": {    "minVelocity": 0.75  }}'
+    pvis_net.set_options(options)
+    color='#c8ccca'
+    zi_a = '悲'
+    zi_b = '衰'
+    zi_c = 'C'
+    pvis_net.add_node(zi_a, label=zi_a, value=1, shape="circle")#, color=color)
+    pvis_net.add_node(zi_b, label=zi_b, value=1, shape="circle")#, color=color)
+    pvis_net.add_edge(zi_a, zi_b)
+
+    pvis_net.add_node('皇', label='皇', value=1, shape="circle")  # , color=color)
+    pvis_net.add_node('堂', label='堂', value=1, shape="circle")  # , color=color)
+    pvis_net.add_node('腸', label='腸', value=1, shape="circle")  # , color=color)
+
+    pvis_net.add_node('妃', label='妃', value=1, shape="circle")  # , color=color)
+    pvis_net.add_node('誰', label='誰', value=1, shape="circle")  # , color=color)
+    pvis_net.add_node('悲', label='悲', value=1, shape="circle")  # , color=color)
+
+    pvis_net.add_edge('皇', '堂')
+    pvis_net.add_edge('皇', '腸')
+    pvis_net.add_edge('堂', '腸')
+
+    pvis_net.add_edge('妃', '誰')
+    pvis_net.add_edge('妃', '悲')
+    pvis_net.add_edge('誰', '悲')
+    #pvis_net.add_edge(zi_b, zi_c)
+
+    pvis_net.show('transitive_network.html')
+
+def transitivity_network():
+    heading = 'blah blah'#zi_a + ' & ' + zi_b
+    pvis_net = Network(height='1000px', width='1000px', heading=heading, font_color="white")
+    # pvis_net.barnes_hut()
+    pvis_net.force_atlas_2based()
+    options = 'var options = {  "edges": {    "color": {      "inherit": "to"    },    "smooth": false  },  "physics": {    "minVelocity": 0.75  }}'
+    pvis_net.set_options(options)
+    color='#c8ccca'
+    zi_a = 'A'
+    zi_b = 'B'
+    zi_c = 'C'
+    pvis_net.add_node(zi_a, label=zi_a, value=1, shape="circle")#, color=color)
+    pvis_net.add_node(zi_b, label=zi_b, value=1, shape="circle")#, color=color)
+    pvis_net.add_node(zi_c, label=zi_c, value=1, shape="circle")#, color=color)
+    pvis_net.add_edge(zi_a, zi_b)
+    pvis_net.add_edge(zi_b, zi_c)
+
+    pvis_net.show('transitive_network.html')
+
+def print_debug_message(msg, is_verbose=False):
+    if is_verbose:
+        print(msg)
+
+def bold_test():
+    import simple_colors
+    x = 1
+    #from prompt_toolkit import print_formatted_text, HTML
+    #print_formatted_text(HTML('<b>This is bold</b>')) # only works in windows console (CMD)
+            #x = 1
+
+def rnetwork_test():
+    funct_name = 'rnetwork_test()'
+    print(funct_name + ' BENVINDO!')
+    input_file = os.path.join(get_hanproj_dir(), 'received-shi', 'received_shi_pre_com_det_rnetwork.txt')
+    if not if_file_exists(input_file, funct_name):
+        return
+    rnet = rnetwork(funct_name)
+    recovered = rnet.readin_rnetwork_from_file(input_file)
+    #recovered.print_all_nodes_n_edges()
+
+#rnetwork_test()
+
+#bold_test()
         #print(poem_dot_stanza)
 #test_poepy_stuff()
 #count_num_nodes_for_baxter_1992()
 #count_num_stanzas_for_baxter_1992()
 #playing_with_poepy_edge_list()
-
+#two_char_network('皇','堂')
+#transitivity_network()
 #dupe_test()
-
+#a_few_poem_network()
 #raw_data_dupe_test()
-
+#test_create_pyvis_network_graph_of_n_most_rhymed_zi_from_file()
+#test_create_pyvis_network_graph_of_n_most_rhymed_zi_from_file()
 #create_network_for_baxter1992_data_4() #---
 
 
@@ -1903,4 +2366,4 @@ def have_compatible_yunwei(zi_a, zi_b, is_verbose=False):
 #test_get_shijing_stats_for_single_char()
 #test_print_shijing_lines_for_given_char()
 #print_shijing_lines_for_list_of_chars(['求', '休', '觩'], True)
-#print_list_of_chars_like_python_list('方、旁、重、僮','、')
+#print_list_of_chars_like_python_list('方、旁、重、僮','、')371

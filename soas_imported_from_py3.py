@@ -26,6 +26,211 @@ def get_oc_seminar_dir():
 def get_guangyun_dir():
     return os.path.join(get_oc_seminar_dir(), 'reference_docs_and_files', 'guangyun_qieyun')
 
+if 0:
+    def get_gsr_number(tchar):
+        readin_char2gsr_data()
+        if is_compatibility_char(tchar):
+            tchar = get_normal_char_given_compatibility_char(tchar)
+        tchar = convert_local_variant2normal_char(tchar) # does nothing if tchar isn't a variant
+        retval = ''
+        if tchar in char2gsr_num_dict:
+            retval = char2gsr_num_dict[tchar]
+        return retval
+char2gsr_num_dict = {}
+
+def get_phonological_data_dir():
+    return os.path.join(get_soas_code_dir(), 'hanproj', 'phonological_data')
+
+def get_soas_code_dir():
+    return os.path.join('D:' + os.sep + 'Ash', 'SOAS', 'code')
+
+def readin_char2gsr_data():
+    funct_name = 'readin_char2gsr_data()'
+    global char2gsr_num_dict
+    if char2gsr_num_dict:
+        return
+    input_file = os.path.join(get_phonological_data_dir(),'kGSR.txt')
+    if not os.path.isfile(input_file):
+        print(funct_name + ' ERROR: Invalid input file: ' + input_file)
+        return
+    data = readlines_of_utf8_file(input_file)
+    for d in data:
+        d = d.split('\t')
+        if d[0] not in char2gsr_num_dict:
+            char2gsr_num_dict[d[0]] = ''
+        char2gsr_num_dict[d[0]] = d[1]
+
+gsr2gsc_num_dict = {}
+def readin_gsr2gsc_num_data(is_verbose=False):
+    funct_name = 'readin_gsr2gsc_num_data()'
+    global gsr2gsc_num_dict
+    if gsr2gsc_num_dict:
+        return
+    input_file = os.path.join(get_phonological_data_dir(), 'gsr2gsc_number.txt')
+    if not os.path.isfile(input_file):
+        print(funct_name + ' ERROR: Invalid input file: ' + input_file)
+        return
+    data = readlines_of_utf8_file(input_file)
+    for d in data:
+        d = d.split('\t')
+        gsr_num = d[0]
+        if gsr_num not in gsr2gsc_num_dict:
+            gsr2gsc_num_dict[gsr_num] = ''
+        gsr2gsc_num_dict[gsr_num] = d[1]
+    if is_verbose:
+        for k in gsr2gsc_num_dict:
+            print(k + ': ' + gsr2gsc_num_dict[k])
+
+def convert_gsr2gsc_number(gsr_num):
+    if not gsr_num.strip():
+        return ''
+    readin_gsr2gsc_num_data()
+    if '0049q' in gsr_num:
+        x = 1
+    try:
+        if gsr_num[len(gsr_num)-1] == '\'':
+            gsr_num = gsr_num[0:len(gsr_num) - 1]
+        if gsr_num[len(gsr_num)-1].isalpha():
+            gsr_num = gsr_num[0:len(gsr_num) - 1]
+    except IndexError as ie:
+        x = 1
+    gsr_num = str(int(gsr_num))
+    gsc_num = gsr2gsc_num_dict[gsr_num]
+    return gsc_num
+
+def get_hanproj_dir():
+    return os.path.join(get_soas_code_dir(), 'hanproj')
+
+def is_compatibility_char(entry):
+    readin_kcompatibility_variant_data_into_dict()
+    retval = False
+    if entry in compat2normal_dict:
+        retval = True
+    return retval
+
+local_var2normal_char_dict = {}
+def convert_local_variant2normal_char(tchar):
+    if tchar in local_var2normal_char_dict:
+        tchar = local_var2normal_char_dict[tchar]
+    return tchar
+
+def get_gsr_number(tchar):
+    readin_char2gsr_data()
+    if is_compatibility_char(tchar):
+        tchar = get_normal_char_given_compatibility_char(tchar)
+    tchar = convert_local_variant2normal_char(tchar) # does nothing if tchar isn't a variant
+    retval = ''
+    if tchar in char2gsr_num_dict:
+        retval = char2gsr_num_dict[tchar]
+    return retval
+
+def if_file_exists(filename, funct_name):
+    retval = False
+    if os.path.isfile(filename):
+        retval = True
+    else:
+        print(funct_name + ' ERROR: Invalid input file:  ' + filename)
+    return retval
+
+char2gy_dict = {}
+def readin_guangyun_data():
+    funct_name = 'readin_guangyun_data()'
+    global char2gy_dict
+    if char2gy_dict:
+        return
+    input_file = os.path.join(get_phonological_data_dir(), 'baxter_guangyun_utf8.txt')
+    if not if_file_exists(input_file, funct_name):
+        return
+    raw_data = readlines_of_utf8_file(input_file)
+    for rd in raw_data:
+        rd = rd.split('\t')
+        char_list = rd[10]
+        # print(char_list)
+        char_list = list(set(char_list))
+        for c in char_list:
+            if c not in char2gy_dict:
+                char2gy_dict[c] = []
+            char2gy_dict[c].append('\t'.join(rd))
+            # test = '聑𠲷𢬴笘喋㝪跕䩞𧚊㑙𨓊涉䶬'
+            # print('test=' + test)
+            # test = list(set(test))
+            # print('list(set(test))=' + ''.join(test))
+
+def get_gsc_number(tchar):
+    gsr_num = get_gsr_number(tchar)
+    retval = -1
+    if gsr_num.strip():
+        retval = convert_gsr2gsc_number(gsr_num)
+    return retval
+
+def get_guangyun_data_for_char(schar):
+    readin_guangyun_data()
+    retval = ''
+    if schar in char2gy_dict:
+        retval = char2gy_dict[schar]
+    return retval
+
+def get_user_msg_given_gsr_n_gsc_numbers(gsr, gsc, zi=''):
+    msg_out = ''
+    if gsc != -1:  #
+        msg_out += 'GSC (' + gsc + '):'
+    elif gsr:
+        msg_out += 'GSR (' + gsr + '; No GSC#!):'
+    else:
+        msg_out += 'No GSR or GSC number. Use same MC method!'
+        if zi:
+            gy_data = get_guangyun_data_for_char(zi)
+            if gy_data:
+                for gy in gy_data:
+                    msg_out += '\n' + gy
+    return msg_out
+
+def get_normal_char_given_compatibility_char(entry):
+    funct_name = 'get_normal_char_given_compatibility_char()'
+    readin_kcompatibility_variant_data_into_dict()
+    retval = entry
+    if entry in compat2normal_dict:
+        retval = compat2normal_dict[entry]
+    return retval
+
+compat2normal_dict = {}
+# format: compat2normal_dict[compat_char] = normal_char
+def readin_kcompatibility_variant_data_into_dict():  # kCompatibilityVariant.txt
+    funct_name = 'readin_kcompatibility_variant_data_into_dict()'
+    global compat2normal_dict
+    if compat2normal_dict:
+        return compat2normal_dict
+    #base_dir = os.path.join('C:' + os.sep + 'Ash', 'research', 'code', 'python', 'data')
+    #get_hanproj_dir()
+    filename = 'kCompatibilityVariant.txt'
+    line_list = readlines_of_utf8_file(os.path.join(get_hanproj_dir(), 'hanproject', filename))
+    delim = '\t'
+    for l in line_list:
+        compat_char = get_data_from_pos(l, 0, delim)
+        normal_char = get_data_from_pos(l, 1, delim)
+        normal_char = normal_char.replace('U+', u'')
+        if len(normal_char) == 5:
+            print(funct_name + ' cannot process ' + normal_char)
+            print('\t' + ' Only 4 byte chars are currently supported.')
+            continue
+        normal_char = convert_2byte_ncr_to_unicode_char(normal_char)
+        # print(u'compat: ' + compat_char + u', normal: ' + normal_char)
+        if compat_char not in compat2normal_dict.keys():
+            compat2normal_dict[compat_char] = ''
+        compat2normal_dict[compat_char] = normal_char
+
+def is_compatibility_char(entry):
+    funct_name = 'is_compatibility_char()'
+    retval = False
+    if not entry.strip():
+        return retval
+    if len(entry) != 1:
+        return retval
+    entry = ord(entry)
+    if entry >= 0xf900 and entry <= 0xfaff:
+        retval = True
+    return retval
+
 def readin_guangyun_zi_data(verbose=False):
     funct_name = 'readin_guangyun_zi_data()'
     input_file = os.path.join(get_guangyun_dir(),'guangyun_hanzi.txt')
