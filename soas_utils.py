@@ -2736,6 +2736,8 @@ class multi_dataset_processor:
         # annotate Lu1983 poems with community detection
         print_debug_msgs = True
         every_line_rhymes = True # False: every other line rhymes, True: every line rhymes
+        if data_type == 'received_shi':
+            every_line_rhymes = False
         #
         # Readin input data
         uniqid2poem_dict = {}
