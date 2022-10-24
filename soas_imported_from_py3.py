@@ -2,8 +2,6 @@
 # -*- encoding: utf-8 -*-
 import os
 import codecs
-#from py3_outlier_utils import get_py3_project_dir
-#from soas_utils import readlines_of_utf8_file
 import copy
 
 utf8_bom = '\xef\xbb\xbf'
@@ -26,16 +24,6 @@ def get_oc_seminar_dir():
 def get_guangyun_dir():
     return os.path.join(get_oc_seminar_dir(), 'reference_docs_and_files', 'guangyun_qieyun')
 
-if 0:
-    def get_gsr_number(tchar):
-        readin_char2gsr_data()
-        if is_compatibility_char(tchar):
-            tchar = get_normal_char_given_compatibility_char(tchar)
-        tchar = convert_local_variant2normal_char(tchar) # does nothing if tchar isn't a variant
-        retval = ''
-        if tchar in char2gsr_num_dict:
-            retval = char2gsr_num_dict[tchar]
-        return retval
 char2gsr_num_dict = {}
 
 def get_phonological_data_dir():

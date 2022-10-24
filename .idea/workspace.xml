@@ -7,7 +7,17 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="376ce771-859d-491e-ac5a-c5cedde0ade9" name="Default" comment="">
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/soas_utils.py" afterPath="$PROJECT_DIR$/soas_utils.py" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/soas_utils.py" afterPath="" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/.idea/workspace.xml" afterPath="$PROJECT_DIR$/.idea/workspace.xml" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/Combined-Data-Pre-Com-Det.html" afterPath="$PROJECT_DIR$/Combined-Data-Pre-Com-Det.html" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/Schuessler_combo_data.html" afterPath="$PROJECT_DIR$/Schuessler_combo_data.html" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/com_det_for_combined_data_output.html" afterPath="$PROJECT_DIR$/com_det_for_combined_data_output.html" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/hanproj_filename_depot.py" afterPath="$PROJECT_DIR$/hanproj_filename_depot.py" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/node_id2cluster_no.txt" afterPath="$PROJECT_DIR$/node_id2cluster_no.txt" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/nodes_n_edges_annotated_combined_data_pre_com_det_.txt" afterPath="$PROJECT_DIR$/nodes_n_edges_annotated_combined_data_pre_com_det_.txt" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/pre_com_det_mirrors.html" afterPath="$PROJECT_DIR$/pre_com_det_mirrors.html" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/soas_imported_from_py3.py" afterPath="$PROJECT_DIR$/soas_imported_from_py3.py" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/soas_misc.py" afterPath="$PROJECT_DIR$/soas_misc.py" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="TRACKING_ENABLED" value="true" />
@@ -17,17 +27,19 @@
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="CoverageDataManager">
-    <SUITE FILE_PATH="coverage/hanproject$soas_misc.coverage" NAME="soas_misc Coverage Results" MODIFIED="1655493508605" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/hanproject$py_test_in_soas_tree_structure_py.coverage" NAME="py.test in soas_tree_structure.py Coverage Results" MODIFIED="1664048106053" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="" />
     <SUITE FILE_PATH="coverage/hanproject$general_tree.coverage" NAME="general_tree Coverage Results" MODIFIED="1664212052814" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/hanproject$soas_misc.coverage" NAME="soas_misc Coverage Results" MODIFIED="1666481630202" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/hanproject$soas_rhyme_net_structs.coverage" NAME="soas_rhyme_net_structs Coverage Results" MODIFIED="1664832463038" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/hanproject$soas_rnetwork_test.coverage" NAME="soas_rnetwork_test Coverage Results" MODIFIED="1661282920299" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/hanproject$soas_utils.coverage" NAME="soas_utils Coverage Results" MODIFIED="1666456273127" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/hanproject$hanproj_filename_depot.coverage" NAME="hanproj_filename_depot Coverage Results" MODIFIED="1666482389481" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/hanproject$soas_tree_structure.coverage" NAME="soas_tree_structure Coverage Results" MODIFIED="1664913080660" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/hanproject$py_test_in_annotator_comparison_py.coverage" NAME="py.test in annotator_comparison.py Coverage Results" MODIFIED="1664048674424" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="" />
-    <SUITE FILE_PATH="coverage/hanproject$soas_rnetwork_test.coverage" NAME="soas_rnetwork_test Coverage Results" MODIFIED="1661282920299" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/hanproject$schuessler_ime.coverage" NAME="schuessler_ime Coverage Results" MODIFIED="1666382099611" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/hanproject$annotator_comparison.coverage" NAME="annotator_comparison Coverage Results" MODIFIED="1666288117867" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/hanproject$soas_data_processing.coverage" NAME="soas_data_processing Coverage Results" MODIFIED="1666564415762" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/hanproject$gui_test.coverage" NAME="gui_test Coverage Results" MODIFIED="1657220675096" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
-    <SUITE FILE_PATH="coverage/hanproject$soas_utils.coverage" NAME="soas_utils Coverage Results" MODIFIED="1666456273127" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
     <SUITE FILE_PATH="coverage/hanproject$soas_network_utils.coverage" NAME="soas_network_utils Coverage Results" MODIFIED="1666378124803" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
   <component name="CreatePatchCommitExecutor">
@@ -44,22 +56,44 @@
   <component name="ExecutionTargetManager" SELECTED_TARGET="default_target" />
   <component name="FileEditorManager">
     <leaf SIDE_TABS_SIZE_LIMIT_KEY="300">
-      <file leaf-file-name="soas_utils.py" pinned="false" current-in-tab="false">
-        <entry file="file://$PROJECT_DIR$/soas_utils.py">
+      <file leaf-file-name="soas_data_processing.py" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/soas_data_processing.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="393">
-              <caret line="2739" column="37" lean-forward="false" selection-start-line="2739" selection-start-column="37" selection-end-line="2739" selection-end-column="37" />
+            <state relative-caret-position="1225">
+              <caret line="1952" column="35" lean-forward="false" selection-start-line="1952" selection-start-column="35" selection-end-line="1952" selection-end-column="35" />
               <folding />
             </state>
           </provider>
         </entry>
       </file>
-      <file leaf-file-name="annotator_comparison.py" pinned="false" current-in-tab="true">
+      <file leaf-file-name="annotator_comparison.py" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/annotator_comparison.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="209">
-              <caret line="850" column="17" lean-forward="false" selection-start-line="850" selection-start-column="16" selection-end-line="850" selection-end-column="17" />
+            <state relative-caret-position="28550">
+              <caret line="1142" column="37" lean-forward="false" selection-start-line="1142" selection-start-column="37" selection-end-line="1142" selection-end-column="37" />
               <folding />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="soas_imported_from_py3.py" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/soas_imported_from_py3.py">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="0">
+              <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
+              <folding />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="soas_misc.py" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/soas_misc.py">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="22175">
+              <caret line="887" column="1" lean-forward="false" selection-start-line="887" selection-start-column="1" selection-end-line="887" selection-end-column="1" />
+              <folding>
+                <marker date="1666562072289" expanded="true" signature="37989:38009" ph="..." />
+              </folding>
             </state>
           </provider>
         </entry>
@@ -67,8 +101,8 @@
       <file leaf-file-name="soas_rnetwork_test.py" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/soas_rnetwork_test.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="232">
-              <caret line="34" column="1" lean-forward="false" selection-start-line="34" selection-start-column="1" selection-end-line="34" selection-end-column="1" />
+            <state relative-caret-position="59225">
+              <caret line="2369" column="0" lean-forward="false" selection-start-line="2369" selection-start-column="0" selection-end-line="2369" selection-end-column="0" />
               <folding />
             </state>
           </provider>
@@ -77,19 +111,21 @@
       <file leaf-file-name="soas_rhyme_net_structs.py" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/soas_rhyme_net_structs.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="222">
-              <caret line="11" column="77" lean-forward="false" selection-start-line="11" selection-start-column="32" selection-end-line="11" selection-end-column="77" />
+            <state relative-caret-position="19575">
+              <caret line="783" column="21" lean-forward="false" selection-start-line="783" selection-start-column="21" selection-end-line="783" selection-end-column="21" />
               <folding />
             </state>
           </provider>
         </entry>
       </file>
-      <file leaf-file-name="hanproj_filename_depot.py" pinned="false" current-in-tab="false">
+      <file leaf-file-name="hanproj_filename_depot.py" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/hanproj_filename_depot.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="606">
-              <caret line="112" column="0" lean-forward="true" selection-start-line="112" selection-start-column="0" selection-end-line="112" selection-end-column="0" />
-              <folding />
+            <state relative-caret-position="255">
+              <caret line="15" column="9" lean-forward="false" selection-start-line="15" selection-start-column="9" selection-end-line="15" selection-end-column="9" />
+              <folding>
+                <marker date="1666564413777" expanded="true" signature="6655:6734" ph="..." />
+              </folding>
             </state>
           </provider>
         </entry>
@@ -97,8 +133,8 @@
       <file leaf-file-name="soas_network_utils.py" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/soas_network_utils.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="513">
-              <caret line="1441" column="39" lean-forward="true" selection-start-line="1441" selection-start-column="39" selection-end-line="1441" selection-end-column="39" />
+            <state relative-caret-position="36025">
+              <caret line="1441" column="39" lean-forward="false" selection-start-line="1441" selection-start-column="39" selection-end-line="1441" selection-end-column="39" />
               <folding />
             </state>
           </provider>
@@ -115,20 +151,6 @@
   </component>
   <component name="FindInProjectRecents">
     <findStrings>
-      <find>self.s_received_net</find>
-      <find>self.s_received_graph</find>
-      <find>self.stelae_rnet</find>
-      <find>self.stelae_graph</find>
-      <find>self.s_stelae_rnet</find>
-      <find>self.s_stelae_graph</find>
-      <find>self.mirror_rnet</find>
-      <find>self.mirror_graph</find>
-      <find>self.s_mirror_rnet</find>
-      <find>self.s_mirror_graph</find>
-      <find>Post-Com</find>
-      <find>.get_network_object</find>
-      <find>'mirror'</find>
-      <find>input_file = os.path.join(get_hanproj_dir(), 'phonological_data',</find>
       <find>test_</find>
       <find>pvis</find>
       <find>class mu</find>
@@ -142,9 +164,23 @@
       <find>'stelae_data'</find>
       <find>'mirrors_data</find>
       <find>code</find>
-      <find>get_com_det_group_descriptions_for_combo_data</find>
       <find>node</find>
+      <find>i</find>
+      <find>print_nodes_n_edges2file</find>
+      <find>parse_schuessler_lhan_syllable</find>
+      <find>rnetwork</find>
+      <find>rn_rhyme_pairs</find>
+      <find>get_rhyme_type_if_it_is_there</find>
+      <find>is_line_a_rhyming_line</find>
+      <find>get_phonological_data_dir</find>
       <find>readin_community_detection_group_descriptions</find>
+      <find>_dir</find>
+      <find>filename_depot(</find>
+      <find>test_multi_dataset_processor</find>
+      <find>cydifflib</find>
+      <find>get_soas_data_dir</find>
+      <find>get_poem_name_given_number</find>
+      <find>get_com_det_group_descriptions_for_combo_data</find>
     </findStrings>
   </component>
   <component name="Git.Settings">
@@ -154,8 +190,6 @@
     <option name="CHANGED_PATHS">
       <list>
         <option value="$PROJECT_DIR$/gui_test.py" />
-        <option value="$PROJECT_DIR$/soas_misc.py" />
-        <option value="$PROJECT_DIR$/soas_imported_from_py3.py" />
         <option value="$PROJECT_DIR$/schuessler_ime.py" />
         <option value="$PROJECT_DIR$/linked_list.py" />
         <option value="$PROJECT_DIR$/general_tree.py" />
@@ -163,9 +197,12 @@
         <option value="$PROJECT_DIR$/annotator_comparison.py" />
         <option value="$PROJECT_DIR$/soas_network_utils.py" />
         <option value="$PROJECT_DIR$/soas_rnetwork_test.py" />
+        <option value="$PROJECT_DIR$/soas_utils.py" />
+        <option value="$PROJECT_DIR$/soas_imported_from_py3.py" />
+        <option value="$PROJECT_DIR$/soas_data_processing.py" />
+        <option value="$PROJECT_DIR$/soas_misc.py" />
         <option value="$PROJECT_DIR$/soas_rhyme_net_structs.py" />
         <option value="$PROJECT_DIR$/hanproj_filename_depot.py" />
-        <option value="$PROJECT_DIR$/soas_utils.py" />
       </list>
     </option>
   </component>
@@ -210,8 +247,8 @@
           </PATH>
         </subPane>
       </pane>
-      <pane id="Scratches" />
       <pane id="Scope" />
+      <pane id="Scratches" />
     </panes>
   </component>
   <component name="PropertiesComponent">
@@ -222,7 +259,7 @@
     <property name="js-jscs-nodeInterpreter" value="C:\Program Files\nodejs\node.exe" />
     <property name="last_opened_file_path" value="C:/Python310/python.exe" />
   </component>
-  <component name="RunManager" selected="Python.soas_utils">
+  <component name="RunManager" selected="Python.soas_data_processing">
     <configuration default="false" name="soas_utils" type="PythonConfigurationType" factoryName="Python" temporary="true">
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
@@ -237,24 +274,6 @@
       <module name="hanproject" />
       <EXTENSION ID="PythonCoverageRunConfigurationExtension" enabled="false" sample_coverage="true" runner="coverage.py" />
       <option name="SCRIPT_NAME" value="$PROJECT_DIR$/soas_utils.py" />
-      <option name="PARAMETERS" value="" />
-      <option name="SHOW_COMMAND_LINE" value="false" />
-      <method />
-    </configuration>
-    <configuration default="false" name="soas_tree_structure" type="PythonConfigurationType" factoryName="Python" temporary="true">
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="PARENT_ENVS" value="true" />
-      <envs>
-        <env name="PYTHONUNBUFFERED" value="1" />
-      </envs>
-      <option name="SDK_HOME" value="" />
-      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
-      <option name="IS_MODULE_SDK" value="true" />
-      <option name="ADD_CONTENT_ROOTS" value="true" />
-      <option name="ADD_SOURCE_ROOTS" value="true" />
-      <module name="hanproject" />
-      <EXTENSION ID="PythonCoverageRunConfigurationExtension" enabled="false" sample_coverage="true" runner="coverage.py" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/soas_tree_structure.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="false" />
       <method />
@@ -277,7 +296,7 @@
       <option name="SHOW_COMMAND_LINE" value="false" />
       <method />
     </configuration>
-    <configuration default="false" name="soas_network_utils" type="PythonConfigurationType" factoryName="Python" temporary="true">
+    <configuration default="false" name="soas_misc" type="PythonConfigurationType" factoryName="Python" temporary="true">
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
       <envs>
@@ -290,12 +309,12 @@
       <option name="ADD_SOURCE_ROOTS" value="true" />
       <module name="hanproject" />
       <EXTENSION ID="PythonCoverageRunConfigurationExtension" enabled="false" sample_coverage="true" runner="coverage.py" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/soas_network_utils.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/soas_misc.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="false" />
       <method />
     </configuration>
-    <configuration default="false" name="annotator_comparison" type="PythonConfigurationType" factoryName="Python" temporary="true">
+    <configuration default="false" name="hanproj_filename_depot" type="PythonConfigurationType" factoryName="Python" temporary="true">
       <option name="INTERPRETER_OPTIONS" value="" />
       <option name="PARENT_ENVS" value="true" />
       <envs>
@@ -308,7 +327,25 @@
       <option name="ADD_SOURCE_ROOTS" value="true" />
       <module name="hanproject" />
       <EXTENSION ID="PythonCoverageRunConfigurationExtension" enabled="false" sample_coverage="true" runner="coverage.py" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/annotator_comparison.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/hanproj_filename_depot.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <method />
+    </configuration>
+    <configuration default="false" name="soas_data_processing" type="PythonConfigurationType" factoryName="Python" temporary="true">
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <module name="hanproject" />
+      <EXTENSION ID="PythonCoverageRunConfigurationExtension" enabled="false" sample_coverage="true" runner="coverage.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/soas_data_processing.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="false" />
       <method />
@@ -529,18 +566,18 @@
     </configuration>
     <list size="5">
       <item index="0" class="java.lang.String" itemvalue="Python.soas_utils" />
-      <item index="1" class="java.lang.String" itemvalue="Python.soas_tree_structure" />
-      <item index="2" class="java.lang.String" itemvalue="Python.schuessler_ime" />
-      <item index="3" class="java.lang.String" itemvalue="Python.soas_network_utils" />
-      <item index="4" class="java.lang.String" itemvalue="Python.annotator_comparison" />
+      <item index="1" class="java.lang.String" itemvalue="Python.schuessler_ime" />
+      <item index="2" class="java.lang.String" itemvalue="Python.soas_misc" />
+      <item index="3" class="java.lang.String" itemvalue="Python.hanproj_filename_depot" />
+      <item index="4" class="java.lang.String" itemvalue="Python.soas_data_processing" />
     </list>
     <recent_temporary>
       <list size="5">
-        <item index="0" class="java.lang.String" itemvalue="Python.soas_utils" />
-        <item index="1" class="java.lang.String" itemvalue="Python.schuessler_ime" />
-        <item index="2" class="java.lang.String" itemvalue="Python.soas_network_utils" />
-        <item index="3" class="java.lang.String" itemvalue="Python.annotator_comparison" />
-        <item index="4" class="java.lang.String" itemvalue="Python.soas_tree_structure" />
+        <item index="0" class="java.lang.String" itemvalue="Python.soas_data_processing" />
+        <item index="1" class="java.lang.String" itemvalue="Python.hanproj_filename_depot" />
+        <item index="2" class="java.lang.String" itemvalue="Python.soas_misc" />
+        <item index="3" class="java.lang.String" itemvalue="Python.soas_utils" />
+        <item index="4" class="java.lang.String" itemvalue="Python.schuessler_ime" />
       </list>
     </recent_temporary>
   </component>
@@ -602,13 +639,13 @@
     <frame x="-8" y="-8" width="1936" height="1056" extended-state="6" />
     <editor active="true" />
     <layout>
-      <window_info id="Project" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.19296375" sideWeight="0.5" order="0" side_tool="false" content_ui="combo" />
+      <window_info id="Project" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.19509594" sideWeight="0.5" order="0" side_tool="false" content_ui="combo" />
       <window_info id="TODO" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.32960895" sideWeight="0.5" order="6" side_tool="false" content_ui="tabs" />
       <window_info id="Event Log" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="7" side_tool="true" content_ui="tabs" />
       <window_info id="Database" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.026652452" sideWeight="0.5" order="3" side_tool="false" content_ui="tabs" />
       <window_info id="Version Control" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.32960895" sideWeight="0.5" order="7" side_tool="false" content_ui="tabs" />
-      <window_info id="Python Console" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.15669206" sideWeight="0.5" order="7" side_tool="false" content_ui="tabs" />
-      <window_info id="Run" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.14254625" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
+      <window_info id="Python Console" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.4156692" sideWeight="0.5" order="7" side_tool="false" content_ui="tabs" />
+      <window_info id="Run" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.38628945" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
       <window_info id="Structure" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.25" sideWeight="0.5" order="1" side_tool="false" content_ui="tabs" />
       <window_info id="Terminal" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="7" side_tool="false" content_ui="tabs" />
       <window_info id="Favorites" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="2" side_tool="true" content_ui="tabs" />
@@ -651,86 +688,6 @@
   <component name="XDebuggerManager">
     <breakpoint-manager>
       <breakpoints>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/soas_utils.py</url>
-          <line>3787</line>
-          <option name="timeStamp" value="19" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/soas_utils.py</url>
-          <line>3694</line>
-          <option name="timeStamp" value="22" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/soas_misc.py</url>
-          <line>501</line>
-          <option name="timeStamp" value="80" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/soas_misc.py</url>
-          <line>828</line>
-          <option name="timeStamp" value="88" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/soas_misc.py</url>
-          <line>821</line>
-          <option name="timeStamp" value="89" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/soas_utils.py</url>
-          <line>4490</line>
-          <option name="timeStamp" value="101" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/soas_utils.py</url>
-          <line>4487</line>
-          <option name="timeStamp" value="109" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/soas_utils.py</url>
-          <line>4693</line>
-          <option name="timeStamp" value="112" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/soas_utils.py</url>
-          <line>4711</line>
-          <option name="timeStamp" value="149" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/soas_utils.py</url>
-          <line>4708</line>
-          <option name="timeStamp" value="150" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/soas_utils.py</url>
-          <line>4724</line>
-          <option name="timeStamp" value="187" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/soas_utils.py</url>
-          <line>5165</line>
-          <option name="timeStamp" value="208" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/soas_utils.py</url>
-          <line>4788</line>
-          <option name="timeStamp" value="214" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/soas_utils.py</url>
-          <line>5297</line>
-          <option name="timeStamp" value="236" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/soas_utils.py</url>
-          <line>5291</line>
-          <option name="timeStamp" value="258" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/soas_utils.py</url>
-          <line>4906</line>
-          <option name="timeStamp" value="267" />
-        </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/soas_network_utils.py</url>
           <line>768</line>
@@ -807,16 +764,6 @@
           <option name="timeStamp" value="408" />
         </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/soas_utils.py</url>
-          <line>5219</line>
-          <option name="timeStamp" value="412" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/soas_utils.py</url>
-          <line>5223</line>
-          <option name="timeStamp" value="420" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/soas_rnetwork_test.py</url>
           <line>366</line>
           <option name="timeStamp" value="424" />
@@ -842,24 +789,9 @@
           <option name="timeStamp" value="444" />
         </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/soas_utils.py</url>
-          <line>2762</line>
-          <option name="timeStamp" value="482" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/soas_utils.py</url>
-          <line>2424</line>
-          <option name="timeStamp" value="483" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/soas_rnetwork_test.py</url>
           <line>487</line>
           <option name="timeStamp" value="490" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/soas_utils.py</url>
-          <line>2081</line>
-          <option name="timeStamp" value="507" />
         </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/annotator_comparison.py</url>
@@ -962,11 +894,6 @@
           <option name="timeStamp" value="622" />
         </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/soas_utils.py</url>
-          <line>3819</line>
-          <option name="timeStamp" value="637" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/soas_tree_structure.py</url>
           <line>168</line>
           <option name="timeStamp" value="678" />
@@ -980,11 +907,6 @@
           <url>file://$PROJECT_DIR$/annotator_comparison.py</url>
           <line>796</line>
           <option name="timeStamp" value="716" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/soas_utils.py</url>
-          <line>2804</line>
-          <option name="timeStamp" value="717" />
         </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/soas_rhyme_net_structs.py</url>
@@ -1012,21 +934,7 @@
     <watches-manager />
   </component>
   <component name="editorHistoryManager">
-    <entry file="file://$PROJECT_DIR$/soas_bib_processing.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="250">
-          <caret line="10" column="25" lean-forward="false" selection-start-line="10" selection-start-column="25" selection-end-line="10" selection-end-column="25" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/soas_utils.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="0">
-          <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
-          <folding />
-        </state>
-      </provider>
-    </entry>
+    <entry file="file://$PROJECT_DIR$/soas_utils.py" />
     <entry file="file://$PROJECT_DIR$/soas_rnetwork_test.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="47125">
@@ -1048,14 +956,7 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/soas_utils.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="0">
-          <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
-          <folding />
-        </state>
-      </provider>
-    </entry>
+    <entry file="file://$PROJECT_DIR$/soas_utils.py" />
     <entry file="file://$PROJECT_DIR$/soas_rnetwork_test.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="47125">
@@ -1077,14 +978,7 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/soas_utils.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="0">
-          <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
-          <folding />
-        </state>
-      </provider>
-    </entry>
+    <entry file="file://$PROJECT_DIR$/soas_utils.py" />
     <entry file="file://$PROJECT_DIR$/soas_rnetwork_test.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="46825">
@@ -1106,14 +1000,7 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/soas_utils.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="0">
-          <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
-          <folding />
-        </state>
-      </provider>
-    </entry>
+    <entry file="file://$PROJECT_DIR$/soas_utils.py" />
     <entry file="file://$PROJECT_DIR$/soas_rnetwork_test.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="46825">
@@ -1135,14 +1022,7 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/soas_utils.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="0">
-          <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
-          <folding />
-        </state>
-      </provider>
-    </entry>
+    <entry file="file://$PROJECT_DIR$/soas_utils.py" />
     <entry file="file://$USER_HOME$/vm4pdf/Lib/site-packages/anytree/node/node.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="1900">
@@ -1270,14 +1150,6 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/soas_misc.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="236">
-          <caret line="1162" column="34" lean-forward="true" selection-start-line="1162" selection-start-column="34" selection-end-line="1162" selection-end-column="34" />
-          <folding />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/soas_bib_processing.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="563">
@@ -1306,13 +1178,6 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/soas_imported_from_py3.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="211">
-          <caret line="43" column="0" lean-forward="false" selection-start-line="43" selection-start-column="0" selection-end-line="43" selection-end-column="0" />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/soas_tree_structure.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="75">
@@ -1329,51 +1194,72 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/soas_network_utils.py">
+    <entry file="file://$PROJECT_DIR$/soas_utils.py" />
+    <entry file="file://$PROJECT_DIR$/soas_imported_from_py3.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="513">
-          <caret line="1441" column="39" lean-forward="true" selection-start-line="1441" selection-start-column="39" selection-end-line="1441" selection-end-column="39" />
-          <folding />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/soas_rhyme_net_structs.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="222">
-          <caret line="11" column="77" lean-forward="false" selection-start-line="11" selection-start-column="32" selection-end-line="11" selection-end-column="77" />
-          <folding />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/soas_rnetwork_test.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="232">
-          <caret line="34" column="1" lean-forward="false" selection-start-line="34" selection-start-column="1" selection-end-line="34" selection-end-column="1" />
-          <folding />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/hanproj_filename_depot.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="606">
-          <caret line="112" column="0" lean-forward="true" selection-start-line="112" selection-start-column="0" selection-end-line="112" selection-end-column="0" />
-          <folding />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/soas_utils.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="393">
-          <caret line="2739" column="37" lean-forward="false" selection-start-line="2739" selection-start-column="37" selection-end-line="2739" selection-end-column="37" />
+        <state relative-caret-position="0">
+          <caret line="0" column="0" lean-forward="false" selection-start-line="0" selection-start-column="0" selection-end-line="0" selection-end-column="0" />
           <folding />
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/annotator_comparison.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="209">
-          <caret line="850" column="17" lean-forward="false" selection-start-line="850" selection-start-column="16" selection-end-line="850" selection-end-column="17" />
+        <state relative-caret-position="28550">
+          <caret line="1142" column="37" lean-forward="false" selection-start-line="1142" selection-start-column="37" selection-end-line="1142" selection-end-column="37" />
           <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/soas_misc.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="22175">
+          <caret line="887" column="1" lean-forward="false" selection-start-line="887" selection-start-column="1" selection-end-line="887" selection-end-column="1" />
+          <folding>
+            <marker date="1666562072289" expanded="true" signature="37989:38009" ph="..." />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/soas_rnetwork_test.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="59225">
+          <caret line="2369" column="0" lean-forward="false" selection-start-line="2369" selection-start-column="0" selection-end-line="2369" selection-end-column="0" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/soas_rhyme_net_structs.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="19575">
+          <caret line="783" column="21" lean-forward="false" selection-start-line="783" selection-start-column="21" selection-end-line="783" selection-end-column="21" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/soas_network_utils.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="36025">
+          <caret line="1441" column="39" lean-forward="false" selection-start-line="1441" selection-start-column="39" selection-end-line="1441" selection-end-column="39" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/soas_data_processing.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="1225">
+          <caret line="1952" column="35" lean-forward="false" selection-start-line="1952" selection-start-column="35" selection-end-line="1952" selection-end-column="35" />
+          <folding />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/hanproj_filename_depot.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="255">
+          <caret line="15" column="9" lean-forward="false" selection-start-line="15" selection-start-column="9" selection-end-line="15" selection-end-column="9" />
+          <folding>
+            <marker date="1666564413777" expanded="true" signature="6655:6734" ph="..." />
+          </folding>
         </state>
       </provider>
     </entry>

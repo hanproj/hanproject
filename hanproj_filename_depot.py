@@ -11,9 +11,27 @@ import os
 class filename_depot:
     def __init__(self, is_verbose=False):
         self.class_name = 'filename_depot'
+        #self.absolute_path = os.path.dirname(__file__)
+        self.absolute_path = os.getcwd()
+        #print(self.absolute_path) # on my machine: D:\Ash\SOAS\code\hanproj\hanproject
+        if '\\' in self.absolute_path:
+            self.dir_delim = '\\'
+        elif '/' in self.absolute_path:
+            self.dir_delim = '/'
+        else:
+            self.dir_delim = ''
+            print('filename_depot: ERROR: unknown type of directory delimiter. Expect chaos!')
+
+    def directory_tests(self):
+        print('self.absolute_path: ' + self.absolute_path)
+        print('self.get_hanproj_dir() returns ' + self.get_hanproj_dir())
+        print('self.get_mirrors_dir() returns ' + self.get_mirrors_dir())
+        print('self.get_stelae_dir() returns ' + self.get_stelae_dir())
+        print('self.get_received_shi_dir() returns ' + self.get_stelae_dir())
 
     def get_hanproj_dir(self):
-        return os.path.join(self.get_soas_code_dir(), 'hanproj')
+        base_path = self.absolute_path.split(self.dir_delim)
+        return self.dir_delim.join(base_path[0:len(base_path)-1])
 
     def get_mirrors_dir(self):
         return os.path.join(self.get_hanproj_dir(), 'mirrors')
@@ -21,16 +39,19 @@ class filename_depot:
     def get_stelae_dir(self):
         return os.path.join(self.get_hanproj_dir(), 'stelae')
 
+    def get_soas_data_dir(self): # this isn't going to work for the repository; need to move the data
+        return os.path.join('D:' + os.sep + 'Ash', 'SOAS', 'data')
+
     def get_received_shi_dir(self):
         return os.path.join(self.get_hanproj_dir(), 'received-shi')
 
     def get_received_bronzes_dir(self):
         return os.path.join(self.get_hanproj_dir(), 'bronzes')
 
-    def get_schuesslerhanchinese_dir(self):
+    def get_schuesslerhanchinese_dir(self): # this isn't going to work for the repository; need to move the data
         return os.path.join(self.get_soas_code_dir(), 'schuesslerhanchinese')
 
-    def get_soas_code_dir(self):
+    def get_soas_code_dir(self): # this isn't going to work for the repository; need to move the data
         return os.path.join('D:' + os.sep + 'Ash', 'SOAS', 'code')
 
     def get_parsed_mao_2008_stelae_data_file(self):
@@ -50,6 +71,8 @@ class filename_depot:
     def get_filename_for_combined_data_community_detection(self):
         return os.path.join(self.get_hanproj_dir(), 'combo', 'com_det_for_combined_data_output.txt')
 
+    def get_phonological_data_dir(self):
+        return os.path.join(self.get_hanproj_dir(), 'phonological_data')
     #
     # NOTE:
     #  for now using existing filenames. For the re-write, these will be standardized.
@@ -110,3 +133,8 @@ class filename_depot:
         filename = annotator_type + '_annotated_' + data_type + '_data.txt'
         return os.path.join(self.get_hanproj_dir(), data_type, filename)
 
+def quick_test():
+    filename_storage = filename_depot()
+    filename_storage.directory_tests()
+
+#quick_test()
