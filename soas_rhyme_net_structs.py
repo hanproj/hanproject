@@ -43,7 +43,7 @@ from time import gmtime, strftime
 # NOTE: the similar looking chars are actually different code points
 # also, this is necessary because there are a lot of exception characters in the mirror data
 not_rhyming_char = ['□', '…', '・', '󸌇', '･', '、', '＊', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '×', '○',
-                    'α', '‐', '【缺】', '■']
+                    'α', '‐', '【缺】', '■', '}']
 
 def remove_unwanted_chars_from_str(tstr):
     unwanted_chars = [')','>','｛','？',']','「','”','）','■','；','：','\'','、','」', '･', '＊','×','?', '○','】','‐', '］',
@@ -173,7 +173,7 @@ class stanza_processor:
         # These need to be handled differently. The ones without the weirdness (i.e., the majority) are
         # processed normally
         if self.data_type == 'mirrors' and if_special_mirror_punctuation(self.stanza_str):
-            return get_rhyme_words_for_kmss2015_mirror_inscription(self.stanza_id, self.stanza_str, self.temp_naive_output_file)
+            return get_rhyme_words_for_kmss2015_mirror_inscription(self.stanza_id, self.stanza_str, self.every_line_rhymes,self.temp_naive_output_file)
 
         stanza = self.stanza_str.split('。')
         line_inc = 0
@@ -423,7 +423,7 @@ def append_line_to_utf8_file(filename, content):
 # ASSUMPTIONS:
 #   - (if no 「，」) rhyme words appear before 「。」
 #   - (if both 「，」、「。」) rhyme words appear before 「，」、「。」
-def get_rhyme_words_for_kmss2015_mirror_inscription(unique_id, inscription, output_file='', use_unpunctuated=False):
+def get_rhyme_words_for_kmss2015_mirror_inscription(unique_id, inscription, every_line_rhymes, output_file='', use_unpunctuated=False):
     funct_name = 'get_rhyme_words_for_kmss2015_mirror_inscription()'
     punct_list = ['。', '，']
     retval = []
@@ -442,43 +442,55 @@ def get_rhyme_words_for_kmss2015_mirror_inscription(unique_id, inscription, outp
         inscription = inscription.split('，')
         line_inc = 0
         line_id = ''
+        modulo = 2
+        if every_line_rhymes:
+            modulo = 1
+
         for i in inscription:
             last_char = grab_last_character_in_line(i)
             line_inc += 1
             line_id = unique_id + '.' + str(line_inc)
-            if last_char:
-                char_pos = last_char[1]
-                last_char = last_char[0]
-            #if '・' in last_char or '…' in last_char or '□' in last_char:
-            if any(c in last_char for c in not_rhyming_char):
-                retval.append(('', -1, i, line_id))
-                annotated_stanza.append(i)
-                last_char = ''
-                char_pos = ''
-                continue
-            if any(c in last_char for c in punctuation):
-                retval.append(('', -1, i, line_id))
-                annotated_stanza.append(i)
-                last_char = ''
-                char_pos = ''
-                continue
-            if last_char == '々': # get the character preceeding 々
-                #zi = line[len(line) - 2]
-                char_pos -= 1
-                last_char = i[char_pos]
+            if not line_inc % modulo: # even lines if 'every_line_rhymes' = True, all lines otherwise
+                if last_char:
+                    char_pos = last_char[1]
+                    last_char = last_char[0]
+                #if '・' in last_char or '…' in last_char or '□' in last_char:
+                if any(c in last_char for c in not_rhyming_char):
+                    retval.append(('', -1, i, line_id))
+                    annotated_stanza.append(i)
+                    last_char = ''
+                    char_pos = ''
+                    continue
+                if any(c in last_char for c in punctuation):
+                    retval.append(('', -1, i, line_id))
+                    annotated_stanza.append(i)
+                    last_char = ''
+                    char_pos = ''
+                    continue
+                if last_char == '々': # get the character preceeding 々
+                    #zi = line[len(line) - 2]
+                    char_pos -= 1
+                    last_char = i[char_pos]
 
-            if last_char and (last_char, char_pos, i, line_id) not in retval:
-                retval.append((last_char, char_pos, i, line_id))
-                left = i[:char_pos]
-                right = i[char_pos:]
-                new_line = left + 'a' + right # this assuming naive anntotation
-                annotated_stanza.append(new_line)
+                if last_char and (last_char, char_pos, i, line_id) not in retval:
+                    retval.append((last_char, char_pos, i, line_id))
+                    left = i[:char_pos]
+                    right = i[char_pos:]
+                    new_line = left + 'a' + right # this assuming naive anntotation
+                    annotated_stanza.append(new_line)
+                else:
+                    retval.append(('', -1, i, line_id))
+                    annotated_stanza.append(i)
+                last_char = ''
+                char_pos = ''
+                i = ''
             else:
                 retval.append(('', -1, i, line_id))
                 annotated_stanza.append(i)
-            last_char = ''
-            char_pos = ''
-            i = ''
+                last_char = ''
+                char_pos = ''
+                continue
+
     if retval and retval[len(retval) - 1] == '':
         retval = retval[0:len(retval) - 1]
     if output_file: #  output_file

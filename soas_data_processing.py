@@ -5419,6 +5419,22 @@ def process_all_data_sets():
 def get_timestamp():
     return datetime.datetime.now().strftime("%A, %d %B %Y @ %I:%M%p")
 
+def test_convert_punctuation():
+    funct_name = 'test_convert_punctuation()'
+    # xxx，xxx，xxx，xxx，xxx，xxx，xxx，xxx。
+    # xxx，xxx。xxx，xxx。xxx，xxx。xxx，xxx。
+
+#
+# Purpose:
+# convert this type of punctuation: xxx，xxx，xxx，xxx，xxx，xxx，xxx，xxx。
+#    to this type: xxx，xxx。xxx，xxx。xxx，xxx。xxx，xxx。
+def convert_punctuation(line):
+    funct_name = 'convert_punctuation()'
+    orig_line = line
+    # if the number of ， and 。 are already equal, then the input is very likely already
+    # in the correct format
+    if orig_line.count('，') == orig_line.count('。'):
+        return line
 process_all_data_sets()
 #test_multi_dataset_processor() #-----
 #test_list_of_chars_for_lhan_data()
