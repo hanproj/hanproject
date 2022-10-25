@@ -118,6 +118,7 @@ from soas_imported_from_py3 import get_mc_data_for_char
 from soas_imported_from_py3 import is_kana_letter
 from anytree import Node, RenderTree, PreOrderIter, AsciiStyle
 from soas_tree_structure import get_list_of_fayin_paths
+import datetime
 # from: https://www.programcreek.com/python/example/89583/networkx.draw_networkx_labels
 plt.rcParams['font.sans-serif'] = ['SimHei']  # 步骤一（替换sans-serif字体）
 plt.rcParams['axes.unicode_minus'] = False  # 步骤二（解决坐标轴负数的负号显示问题）
@@ -1518,8 +1519,8 @@ def readin_lu_1983_data(is_verbose=False):
     funct_name = 'readin_lu_1983_data()'
     global lu1983_dict
     global lu1983_labels
-    if lu1983_dict:
-        return lu1983_labels
+    #if lu1983_dict:
+    #    return lu1983_dict # was lu1983_labels
     input_file = os.path.join(filename_storage.get_received_shi_dir(), 'parsed-Lu-1983-先秦漢魏晉南北朝詩.txt')
     if not is_file_valid(input_file, funct_name):
         return []
@@ -2111,6 +2112,7 @@ class multi_dataset_processor:
     def readin_rnetwork_data_from_file(self, filename, network_name, is_verbose=False):
         funct_name = 'readin_rnetwork_data_from_file()'
         if not if_file_exists(filename, funct_name):
+            print(funct_name + ' ERROR: filename = ' + filename + ' is INVALID! Aborting.')
             return
         rhyme_net = self.get_network_object('network', 'naive', 'combo')
         s_rhyme_net = self.get_network_object('network', 'schuessler', 'combo')
@@ -2160,7 +2162,6 @@ class multi_dataset_processor:
                         nodes.append(node)
                         num_nodes += 1
         print(str(len(file_lines)) + ' lines in the file. ' + str(num_nodes) + ' nodes and ' + str(num_edges) + ' edges.')
-        x = 1
 
     def do_not_reprocess_old_data(self):
         self.reprocess_old_data = False
@@ -2255,7 +2256,7 @@ class multi_dataset_processor:
         com_det_file = os.path.join(get_hanproj_dir(), 'hanproject', 'com_detection_kyomeishusei2015_mirror_data_output.txt')
         desired_groups = []
         mirror_rnet = self.get_network_object('network', 'naive', 'mirrors')
-        mirror_rnet.create_pyvis_network_graph_for_community_detected_data('Post-Com Det for Mirror Data', com_det_file, desired_groups)
+        mirror_rnet.create_pyvis_network_by_coloring_pre_com_det_data_w_com_det_groups('Pre-Com Det Mirror Data with Coloring', com_det_file, desired_groups)
         print('\tDone.')
 
     def create_pyvis_network_graph_for_schuessler_combo_data(self, add_weight=True):
@@ -2294,18 +2295,21 @@ class multi_dataset_processor:
 
     def create_pyvis_network_graph_for_received_shi_com_detected_data(self):
         funct_name = 'create_pyvis_network_graph_for_received_shi_com_detected_data()'
-        com_det_file = os.path.join(get_hanproj_dir(), 'hanproject', 'com_detection_lu1983_received_shi_data_output.txt')
+        #com_det_file = os.path.join(get_hanproj_dir(), 'hanproject', 'com_detection_lu1983_received_shi_data_output.txt')
+        com_det_file = os.path.join(get_hanproj_dir(), 'hanproject', 'com_det_annotated_received-shi_graph_data.txt')
+        com_det_file = self.filename_storage.get_filename_for_com_det_network_data('graph', 'com_det', 'received_shi')
         desired_groups = []
         received_net = self.get_network_object('network', 'naive', 'received_shi')
-        received_net.create_pyvis_network_graph_for_community_detected_data('Post-Com Det for Received Shi Data', com_det_file, desired_groups)
+        received_net.create_pyvis_network_by_coloring_pre_com_det_data_w_com_det_groups('Pre-Com Det Received Shi Data with Coloring', com_det_file, desired_groups)
 
     def create_pyvis_network_graph_for_stelae_com_detected_data(self):
         funct_name = 'create_pyvis_network_graph_for_stelae_com_detected_data()'
         com_det_file = os.path.join(get_hanproj_dir(), 'hanproject',
                                     'com_detection_mao_2008_stelae_data_output.txt')
+        com_det_file = os.path.join(get_hanproj_dir(), 'stelae', 'com_det_annotated_stelae_graph_data.txt')
         desired_groups = []
         stelae_rnet = self.get_network_object('network', 'naive', 'stelae')
-        stelae_rnet.create_pyvis_network_graph_for_community_detected_data('Post-Com Det for Stelae Data',
+        stelae_rnet.create_pyvis_network_by_coloring_pre_com_det_data_w_com_det_groups('Pre-Com Det Stelae Data with Coloring',
                                                                            com_det_file, desired_groups)
 
     def create_pyvis_network_graph_for_combined_com_detected_data(self):
@@ -2313,9 +2317,9 @@ class multi_dataset_processor:
         com_det_file = filename_storage.get_filename_for_combined_data_community_detection()
         desired_groups = []
         rhyme_net = rhyme_net = self.get_network_object('network', 'naive', 'combo')
-        rhyme_net.create_pyvis_network_graph_for_community_detected_data('Post-Com Det for Combined Data',
+        rhyme_net.create_pyvis_network_by_coloring_pre_com_det_data_w_com_det_groups('Pre-Com Det Combo Data with Coloring',
                                                                                 com_det_file, desired_groups)
-        #create_pyvis_network_graph_for_community_detected_data
+        #create_pyvis_network_by_coloring_pre_com_det_data_w_com_det_groups
         #NOTE:
         # this function just prints out the data in its current state
         # -> this state may change at different levels of processing
@@ -2693,7 +2697,6 @@ class multi_dataset_processor:
                                 group_info = rw2group_dict[left][0]
                                 group_num = group_info[0]
                             color = g2c.given_group_num_get_color(group_num)
-
                             pyvis_net.add_edge(left, right, weight=weight, color=color, value=weight)
         pyvis_net.show(html_file)
         return pyvis_net
@@ -3160,9 +3163,6 @@ class multi_dataset_processor:
                 try:
                     if data_type == 'mirrors':
                         poem_id = k
-                        #temp_id = int(poem_id.split('.')[1])
-                        #if temp_id == 125:
-                        #    x = 1
                     else:
                         poem_id = uniqid2poem_dict[k].get_poem_id()
                     stanza_id = poem_id + '.' + str(st_inc)
@@ -5239,6 +5239,187 @@ sinput = ['聲', '生']
 #test_get_schuessler_late_han_for_glyph(sinput)
 #test_get_schuessler_late_han_for_glyph(['清','名', '生', '盈', '成', '聽'])#['光','明'])#['里','海','何'])#['門','山'])
 
-test_multi_dataset_processor() #-----
+#
+# Purpose:
+#   This function does pre-community detection (pre-com det) and post-community detection (post-com det) processing
+#   on all data sets:
+# Input:
+#     received_shi (the Lu1983 data; 逯欽立《先秦漢魏晉南北朝詩》1983)
+#     mirrors (the kyomeishusei2015 data; 林裕己《漢三國西晉鏡銘集成》2015)
+#     stelae (the mao2008 data; 毛遠明《漢魏六朝碑刻校注》2008)
+# Output:
+#   I. Various networks are output to the system's default web browser
+#     For each data set:
+#       pre-com det network (monochrome)
+#       pre-com det network (colored using post-com det groups as basis for different colors)
+#       post-com det network
+#   II. Annotated poems
+#     For each data set (output to each data type's directory):
+#       Naively annotated poems
+#       Schuessler annotated poems
+#       Community annotated poems (i.e., annotated using the results of community detection)
+#   III. Combined Data (combo data)
+#     In addition to the singular data types, there is also a combined data type which is output, basically,
+#     all of the input data is put into a single network.
+#
+# This function is set up to run all data types. However, there are a set of flags which can be set to individually
+# select which data to run:
+#   run_lu1983_data = True
+#   run_mirror_data = True
+#   run_stelae_data = True
+#   run_combined_data = True
+#
+#   Setting any of these to False will turn off their respective processing.
+
+def process_all_data_sets():
+    funct_name = 'process_all_data_sets()'
+    is_verbose = True
+    print_debug_msgs = True
+    message2user('Starting multi_dataset_processor()...', is_verbose)
+    message2user(get_timestamp(), is_verbose)
+    processor = multi_dataset_processor(is_verbose)#, delete_old_data)
+    message2user('Done.', is_verbose)
+    run_lu1983_data = True
+    run_mirror_data = True
+    run_stelae_data = True
+    run_combined_data = True
+
+    #
+    # Pre-Com Det processing
+    if run_lu1983_data: # PRE-Com Det
+        message2user('Running Pre-Com Det processing for Received Shi Data...', is_verbose)
+        message2user(get_timestamp(), is_verbose)
+        processor.overwrite_old_data()
+        message2user('\tProcessing Received Shi Data', is_verbose)
+        processor.pre_com_det_processing('received_shi', is_verbose, print_debug_msgs)
+        message2user('\tDone (' + str(get_timestamp()) + ').', is_verbose)
+        message2user('\tOutputting data to file...', is_verbose)
+        processor.output_received_shi_network_to_file()
+        rnet_filename = filename_storage.get_filename_for_annotated_network_data('network', 'naive', 'received_shi')
+        received_net = processor.get_network_object('network', 'naive', 'received_shi')
+        received_net.output_rnetwork_to_file(rnet_filename)
+        message2user('\tDone (' + str(get_timestamp()) + ').', is_verbose)
+        message2user('\tRunning Community Detection...', is_verbose)
+        processor.run_community_detection_for_lu1983()
+        message2user('\tDone (' + str(get_timestamp()) + ').', is_verbose)
+        message2user('\tCreating pyvis network graph with group coloring...', is_verbose)
+        processor.create_pyvis_network_graph_for_received_shi_com_detected_data()
+        message2user('\tDone (' + str(get_timestamp()) + ').', is_verbose)
+        #processor.create_pyvis_network_graph_for_pre_com_det_received_shi()
+        message2user('Done (' + str(get_timestamp()) + ').', is_verbose)
+
+    if run_mirror_data: # PRE-Com Det
+        message2user('Running Pre-Com Det processing for Mirror Data...', is_verbose)
+        message2user(get_timestamp(), is_verbose)
+        processor.overwrite_old_data()
+        message2user('\tProcessing Mirror data...', is_verbose)
+        processor.pre_com_det_processing('mirrors', is_verbose, print_debug_msgs)
+        message2user('\tDone (' + str(get_timestamp()) + ').', is_verbose)
+        message2user('\tOutputting data to file...', is_verbose)
+        processor.output_mirror_network_to_file()
+        message2user('\tDone (' + str(get_timestamp()) + ').', is_verbose)
+        message2user('\tRunning Community Detection...', is_verbose)
+        processor.run_community_detection_for_mirrors()
+        message2user('\tDone (' + str(get_timestamp()) + ').', is_verbose)
+        message2user('\tCreating pyvis network graph with group coloring...', is_verbose)
+        processor.create_pyvis_network_graph_for_mirrors_com_detected_data()
+        message2user('\tDone (' + str(get_timestamp()) + ').', is_verbose)
+        message2user('Done (' + str(get_timestamp()) + ').', is_verbose)
+
+    if run_stelae_data: # PRE-Com Det
+        message2user('Running Pre-Com Det processing for Stelae Data...', is_verbose)
+        message2user(get_timestamp(), is_verbose)
+        processor.overwrite_old_data()
+        message2user('\tProcessing Stelae data...', is_verbose)
+        processor.pre_com_det_processing('stelae', is_verbose, print_debug_msgs)
+        message2user('\tDone (' + str(get_timestamp()) + ').', is_verbose)
+        message2user('\tOutputting data to file...', is_verbose)
+        processor.output_stelae_network_to_file()
+        message2user('\tDone (' + str(get_timestamp()) + ').', is_verbose)
+        message2user('\tRunning Community Detection...', is_verbose)
+        processor.run_community_detection_for_stelae()
+        message2user('\tDone (' + str(get_timestamp()) + ').', is_verbose)
+        message2user('\tCreating pyvis network graph with group coloring...', is_verbose)
+        processor.create_pyvis_network_graph_for_stelae_com_detected_data()
+        message2user('\tDone (' + str(get_timestamp()) + ').', is_verbose)
+        message2user('Done (' + str(get_timestamp()) + ').', is_verbose)
+
+    if run_combined_data: # PRE-Com Det
+        message2user('Running Pre-Com Det processing for Combined Data...', is_verbose)
+        message2user(get_timestamp(), is_verbose)
+        processor.do_not_reprocess_old_data()
+        message2user('\tOutputting data to file...', is_verbose)
+        processor.output_combined_data_network_to_file()
+        message2user('\tDone (' + str(get_timestamp()) + ').', is_verbose)
+        message2user('\tRunning Community Detection...', is_verbose)
+        processor.run_community_detection_for_combined_data()
+        message2user('\tDone (' + str(get_timestamp()) + ').', is_verbose)
+        message2user('\tCreating pyvis network graph with group coloring...', is_verbose)
+        processor.create_pyvis_network_graph_for_combined_com_detected_data()
+        message2user('\tDone (' + str(get_timestamp()) + ').', is_verbose)
+        message2user('\tCreating pyvis network graph for combined Schuessler...', is_verbose)
+        processor.create_pyvis_network_graph_for_schuessler_combo_data()
+        message2user('\tCreating pyvis network graph for pre-com det combined data...', is_verbose)
+        processor.create_pyvis_network_graph_for_pre_com_det_combined_data()
+        message2user('\tDone (' + str(get_timestamp()) + ').', is_verbose)
+        message2user('Done (' + str(get_timestamp()) + ').', is_verbose)
+    #
+    # POST Com Det processing
+    if run_lu1983_data: # POST-Com Det
+        message2user('Running Post-Com Det processing for Received Shi Data...', is_verbose)
+        message2user(get_timestamp(), is_verbose)
+        processor.do_not_reprocess_old_data()
+        message2user('\tCreating network with detected communities for received shi...',
+                     is_verbose)
+        processor.create_network_for_received_shi_with_com_det_annotator()
+        message2user('\tDone (' + str(get_timestamp()) + ').', is_verbose)
+        message2user('Done (' + str(get_timestamp()) + ').', is_verbose)
+    if run_mirror_data: # POST-Com Det
+        message2user('Running Post-Com Det processing for Mirror Data...', is_verbose)
+        message2user(get_timestamp(), is_verbose)
+        processor.do_not_reprocess_old_data()
+        message2user('\tCreating network with detected communities for mirrors...',
+                     is_verbose)
+        processor.create_network_for_mirrors_with_com_det_annotator()
+        message2user('\tDone (' + str(get_timestamp()) + ').', is_verbose)
+        message2user('Done (' + str(get_timestamp()) + ').', is_verbose)
+    if run_stelae_data: # POST-Com Det
+        message2user('Running Post-Com Det processing for Stelae Data...', is_verbose)
+        message2user(get_timestamp(), is_verbose)
+        processor.do_not_reprocess_old_data()
+        message2user('\tCreating network with detected communities for stelae...',
+                     is_verbose)
+        processor.create_network_for_stelae_with_com_det_annotator()
+        message2user('\tDone (' + str(get_timestamp()) + ').', is_verbose)
+        message2user('Done (' + str(get_timestamp()) + ').', is_verbose)
+    if run_combined_data: # POST-Com Det
+        message2user('Running Pre-Com Det processing for Combined Data...', is_verbose)
+        message2user(get_timestamp(), is_verbose)
+        processor.do_not_reprocess_old_data()
+        message2user('Creating Post-Com Det network for Received Shi...', is_verbose)
+        filename = processor.get_filename_for_annotated_network_data('network', 'naive', 'received_shi')
+        processor.readin_rnetwork_data_from_file(filename, 'rhyme_net')
+        message2user('\tDone (' + str(get_timestamp()) + ').', is_verbose)
+
+        message2user('Creating Post-Com Det network for Mirrors...', is_verbose)
+        filename = processor.get_filename_for_annotated_network_data('network', 'naive', 'mirrors')
+        processor.readin_rnetwork_data_from_file(filename, 'rhyme_net')
+        message2user('\tDone (' + str(get_timestamp()) + ').', is_verbose)
+
+        message2user('Creating Post-Com Det network for Stelae...', is_verbose)
+        filename = processor.get_filename_for_annotated_network_data('network', 'naive', 'stelae')
+        processor.readin_rnetwork_data_from_file(filename, 'rhyme_net')
+        message2user('\tDone (' + str(get_timestamp()) + ').', is_verbose)
+
+        message2user('Creating Post-Com Det network for Combo data...', is_verbose)
+        processor.create_network_for_combo_data_with_com_det_annotator()
+        message2user('\tDone (' + str(get_timestamp()) + ').', is_verbose)
+        message2user('Done (' + str(get_timestamp()) + ').', is_verbose)
+
+def get_timestamp():
+    return datetime.datetime.now().strftime("%A, %d %B %Y @ %I:%M%p")
+
+process_all_data_sets()
+#test_multi_dataset_processor() #-----
 #test_list_of_chars_for_lhan_data()
 

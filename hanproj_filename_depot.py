@@ -7,7 +7,6 @@
 
 import os
 
-
 class filename_depot:
     def __init__(self, is_verbose=False):
         self.class_name = 'filename_depot'
@@ -111,7 +110,7 @@ class filename_depot:
     def get_filename_for_com_det_network_data(self, network_type, annotator_type, data_type):
         funct_name = 'get_filename_for_com_det_network_data()'
         data_type = self.modify_data_type_for_filename(data_type)
-        filename = 'com_det_' + annotator_type + '_annotated_' + data_type + '_' + network_type + '_data.txt'
+        filename = annotator_type + '_annotated_' + data_type + '_' + network_type + '_data.txt'
         return os.path.join(self.get_hanproj_dir(), data_type, filename)
 
     def get_filename_for_temp_naively_annotated_data(self, data_type):
@@ -132,6 +131,9 @@ class filename_depot:
         data_type = self.modify_data_type_for_filename(data_type)
         filename = annotator_type + '_annotated_' + data_type + '_data.txt'
         return os.path.join(self.get_hanproj_dir(), data_type, filename)
+
+    def get_pyvis(self, annotator_type, data_type):
+        funct_name = ''
 
 def quick_test():
     filename_storage = filename_depot()

@@ -479,8 +479,8 @@ class rnetwork: # rhyme network
         pvis_net.show(heading.replace(' ', '-') + '.html')
 
 
-    def create_pyvis_network_graph_for_community_detected_data(self, heading, com_det_file, desired_groups=[]):
-        funct_name = 'create_pyvis_network_graph_for_community_detected_data()'
+    def create_pyvis_network_by_coloring_pre_com_det_data_w_com_det_groups(self, heading, com_det_file, desired_groups=[]):
+        funct_name = 'create_pyvis_network_by_coloring_pre_com_det_data_w_com_det_groups()'
         rw2group_dict, group2rw_list = readin_community_detection_group_descriptions(com_det_file)
         if not rw2group_dict and not group2rw_list:
             print(funct_name + ' ERROR: no community detection results to work with!')
@@ -794,7 +794,10 @@ def get_timestamp_for_filename():
     return datetime.datetime.now().strftime("%A_%d_%B_%Y_%I_%M%p")
 
 def calculate_edge_weight_given_num_rhymes(num_rhymes_in_stanza):
-    return float(1.0 / (float(num_rhymes_in_stanza) - 1.0))
+    retval = 1.0
+    if num_rhymes_in_stanza != 1:
+        retval = float(1.0 / (float(num_rhymes_in_stanza) - 1.0))
+    return retval
 
 class rnode: # rhyme node
     # NOTE: 'poem_stanza_num' should actually be in the form '1.2a'
