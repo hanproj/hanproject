@@ -5,10 +5,10 @@ import os
 import copy
 import llist
 from llist import sllist,sllistnode
-import pygtrie
+#import pygtrie
 from anytree import Node, RenderTree, PreOrderIter, AsciiStyle
 
-from msvcrt import getch
+#from msvcrt import getch
 utf8_bom_b = b'\xef\xbb\xbf'
 from timeit import default_timer as timer
 from datetime import timedelta
@@ -610,40 +610,40 @@ def test_linked_list():
         print(n.value.get_zi() + ': ' + n.value.get_fayin())
 
 
-def test_pygtrie():
-    print('\nDictionary test')
-    print('===============\n')
+#def test_pygtrie():
+#    print('\nDictionary test')
+#    print('===============\n')
+#
+#    t = pygtrie.CharTrie()
+#    t['cat'] = True
+#    t['caterpillar'] = True
+#    t['car'] = True
+#    t['bar'] = True
+#    t['exit'] = False
 
-    t = pygtrie.CharTrie()
-    t['cat'] = True
-    t['caterpillar'] = True
-    t['car'] = True
-    t['bar'] = True
-    t['exit'] = False
+#    print('Start typing a word, "exit" to stop')
+#    print('(Other words you might want to try: %s)\n' % ', '.join(sorted(
+#        k for k in t if k != 'exit')))
 
-    print('Start typing a word, "exit" to stop')
-    print('(Other words you might want to try: %s)\n' % ', '.join(sorted(
-        k for k in t if k != 'exit')))
+#    text = ''
+#    while True:
+#        ch = getch()
+#        if ord(ch) < 32:
+#            print('Exiting')
+#            break
 
-    text = ''
-    while True:
-        ch = getch()
-        if ord(ch) < 32:
-            print('Exiting')
-            break
-
-        text += ch
-        value = t.get(text)
-        if value is False:
-            print('Exiting')
-            break
-        if value is not None:
-            print(repr(text), 'is a word')
-        if t.has_subtrie(text):
-            print(repr(text), 'is a prefix of a word')
-        else:
-            print(repr(text), 'is not a prefix, going back to empty string')
-            text = ''
+#        text += ch
+#        value = t.get(text)
+#        if value is False:
+#            print('Exiting')
+#            break
+#        if value is not None:
+#            print(repr(text), 'is a word')
+#        if t.has_subtrie(text):
+#            print(repr(text), 'is a prefix of a word')
+#        else:
+#            print(repr(text), 'is not a prefix, going back to empty string')
+#            text = ''
 
 def readlines_of_utf8_file(filename):
     funct_name = 'readlines_of_utf8_file()'

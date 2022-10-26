@@ -116,7 +116,7 @@ import matplotlib.pyplot as plt
 from infomap import Infomap
 from soas_imported_from_py3 import get_mc_data_for_char
 from soas_imported_from_py3 import is_kana_letter
-from anytree import Node, RenderTree, PreOrderIter, AsciiStyle
+#from anytree import Node, RenderTree, PreOrderIter, AsciiStyle
 from soas_tree_structure import get_list_of_fayin_paths
 import datetime
 # from: https://www.programcreek.com/python/example/89583/networkx.draw_networkx_labels

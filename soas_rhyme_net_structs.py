@@ -528,24 +528,25 @@ def grab_last_character_in_line(line):
 # input data should be of the format:
 # key = '鄉'
 # value = ['hian']
-def create_tree(test_data_dict):
-    funct_name = 'create_tree()'
-    root_node = Node("root")
-    prev_parent = [root_node]
-    total_nodes = []
-    #total_nodes.append(root_node)
-    for e in test_data_dict:
-        fayin = test_data_dict[e]
-        if 'str' in str(type(fayin)):
-            fayin = fayin.split(' ')
-        fayin_nodes = []
-        for fy in fayin:
-            for pp in prev_parent:
-                temp_node = Node(fy, parent=pp)
-                #total_nodes.append(temp_node)
-                fayin_nodes.append(temp_node)
-        prev_parent = fayin_nodes[:]
-    return root_node
+if 0:
+    def create_tree(test_data_dict):
+        funct_name = 'create_tree()'
+        root_node = Node("root")
+        prev_parent = [root_node]
+        total_nodes = []
+        #total_nodes.append(root_node)
+        for e in test_data_dict:
+            fayin = test_data_dict[e]
+            if 'str' in str(type(fayin)):
+                fayin = fayin.split(' ')
+            fayin_nodes = []
+            for fy in fayin:
+                for pp in prev_parent:
+                    temp_node = Node(fy, parent=pp)
+                    #total_nodes.append(temp_node)
+                    fayin_nodes.append(temp_node)
+            prev_parent = fayin_nodes[:]
+        return root_node
 
 def given_root_node_get_list_of_possible_paths(root_node):
     funct_name = 'given_root_node_get_list_of_possible_paths()'
