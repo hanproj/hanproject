@@ -3,6 +3,7 @@
 
 import os
 import copy
+import codecs
 import llist
 from llist import sllist,sllistnode
 #import pygtrie
@@ -116,6 +117,7 @@ class fy_tree3:
     def calculate_paths(self, run_debug=False):
         if run_debug:
             start_time = timer()
+        filename = 'zi_missing_lhan.txt'
         #
         # Add Root node
         #self.temp_node.set_unique_id(self.root_key)
@@ -129,6 +131,8 @@ class fy_tree3:
             fayin_l = self.data_d[zi]  # data is like this: {'深': ['tśʰim', 'śim', 'śimᶜ'], '賢': ['śimᴮ'], '神': ['źin', 'hioŋ']}
             if not fayin_l:
                 print('ERROR: ' + zi + ' is missing LHan!')
+                append_line_to_utf8_file(filename, zi + ' is missing LHan!')
+
             num_sibs_this_depth = len(fayin_l)
             sib_inc = 0
             #code_paths_traversed = []
@@ -789,6 +793,33 @@ def test_tree_structure():
                 print(l)
             print(str(len(df)) + ' lines are different, while ' + str(len(inte)) + ' are the same.')
     x = 1
-#test_pygtrie()
+
+def if_not_unicode_make_it_unicode(my_str):
+    funct_name = 'if_not_unicode_make_it_unicode()'
+    if not is_unicode(my_str):
+        my_str = my_str.decode('utf8')
+    return my_str
+
+def safe_open_utf8_file_for_appending(filename):
+    filename = if_not_unicode_make_it_unicode(filename)
+    p, f = os.path.split(filename)
+    if p and not os.path.isdir(p):  # if the directory doesn't exist, create it
+        os.makedirs(p)
+    return codecs.open(filename, 'a', 'utf8')
+
+def is_unicode(text):
+    retval = False
+    if 'str' in str(type(text)):
+        retval = True
+    return retval
+
+def append_line_to_utf8_file(filename, content):
+    funct_name = 'append_line_to_utf8_file()'
+    output_ptr = safe_open_utf8_file_for_appending(filename)
+    output_ptr.write(content + '\n')
+    if output_ptr:
+        output_ptr.close()
+
+            #test_pygtrie()
 #test_tree_structure()
 #test_linked_list()

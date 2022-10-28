@@ -3133,8 +3133,30 @@ class multi_dataset_processor:
             if 'Lu1983.428' in k:
                 x = 1
                 continue
+
+            if 'Mou2008.045' in k:
+                continue
+
             if 'Mou2008.060' in k:
                 continue
+
+            if 'Mou2008.067' in k:
+                continue
+
+            if 'Mou2008.133' in k: # this one caused my IDE to run out of memory
+                continue
+
+            if 0:
+                if 'Mou2008.064' in k:
+                    continue
+
+
+                if 'Mou2008.080' in k:
+                    continue
+
+                if 'Mou2008.089' in k:
+                    continue
+
 
             if data_type == 'received_shi' or data_type == 'stelae':
                 poem = uniqid2poem_dict[k].get_poem_content_as_str()
@@ -3158,6 +3180,7 @@ class multi_dataset_processor:
             for stanza in stanza_list:
                 if not stanza.strip():
                     continue
+
                 s_annotator.reset()  # should be reset in between stanzas
                 st_inc += 1
                 try:
@@ -3172,6 +3195,7 @@ class multi_dataset_processor:
                 #
                 # Do actual annotation (place markers in poems, write to file)
                 #    and add Nodes
+                stanza = convert_punctuation(stanza, data_type)
                 stanza_proc.input_stanza(stanza, stanza_id, every_line_rhymes)
                 #
                 #   For Naive Annotator
@@ -5424,17 +5448,103 @@ def test_convert_punctuation():
     # xxx，xxx，xxx，xxx，xxx，xxx，xxx，xxx。
     # xxx，xxx。xxx，xxx。xxx，xxx。xxx，xxx。
 
-#
-# Purpose:
 # convert this type of punctuation: xxx，xxx，xxx，xxx，xxx，xxx，xxx，xxx。
 #    to this type: xxx，xxx。xxx，xxx。xxx，xxx。xxx，xxx。
-def convert_punctuation(line):
+
+#
+# Purpose:
+# This converts all ， and 、 into 。
+# 'data_type' is for in case we want to change punctuation differently for different data types.
+def convert_punctuation(line, data_type):
     funct_name = 'convert_punctuation()'
-    orig_line = line
-    # if the number of ， and 。 are already equal, then the input is very likely already
-    # in the correct format
-    if orig_line.count('，') == orig_line.count('。'):
-        return line
+    cnt_straight = line.count('、')
+    if data_type == 'mirrors':
+        if line.count('、') > 1:
+            line = line.replace('、', '。')
+    elif data_type == 'stelae':
+#        if '。 。' in line:
+#            line = line.replace('。 。', '。')
+        if '。' in line:
+            line_split = line.split('。')
+            retval = []
+            for ls in line_split:
+                if ls.strip():
+                    retval.append(ls)
+            line = '。'.join(retval)
+        if '，' in line:
+            line = line.replace('，', '。')
+    #if '，' in line:
+    #    line = line.replace('，', '。')
+    return line
+
+def characterize_stelae_punctuation():
+    funct_name = 'characterize_stelae_punctuation()'
+    filename_storage = filename_depot()
+    data_type = 'stelae'
+    annotator_type = 'naive'
+    filename = filename_storage.get_output_filename_for_poem_marking_annotation(data_type, annotator_type)
+    line_list = readlines_of_utf8_file(filename)
+    max_com = -1
+    for ll in line_list:
+        #print(ll)
+        num_curly_commas = ll.count('，')
+        if num_curly_commas > max_com:
+            max_com = num_curly_commas
+        num_straight_commas = ll.count('、')
+        if num_straight_commas > max_com:
+            max_com = num_straight_commas
+        num_full_stops = ll.count('。')
+        if num_curly_commas > 2:
+            print(ll)
+        elif num_straight_commas > 2:
+            print(ll)
+
+
+def characterize_mirror_punctuation():
+    funct_name = 'characterize_mirror_punctuation()'
+    #readin_kyomeishusei2015_han_mirror_data()
+    filename_storage = filename_depot()
+    data_type = 'mirrors'
+    annotator_type = 'naive'
+    filename = filename_storage.get_output_filename_for_poem_marking_annotation(data_type, annotator_type)
+    line_list = readlines_of_utf8_file(filename)
+    output_file = 'for-nathan.txt'
+    inc = 0
+    current_poem = []
+    prev_poem_num = '-1'
+    max_com = -1
+    for ll in line_list:
+        xx = ll.split('： ')[0]
+        xx = xx.split('.')
+        poem_num = xx[1]
+        # if entering a new poem
+        if poem_num != prev_poem_num:
+            if current_poem and max_com > 0 and len(current_poem) > 2:
+                #print(poem_num + ':')
+                print('\n\t'.join(current_poem))
+                append_line_to_utf8_file(output_file, '\n\t'.join(current_poem))
+            max_com = -1
+            current_poem = []
+            prev_poem_num = poem_num
+        current_poem.append(ll)
+        inc += 1
+        if inc == 4000:
+            x = 1
+        elif inc == 8000:
+            x = 1
+        num_curly_commas = ll.count('，')
+        if num_curly_commas > max_com:
+            max_com = num_curly_commas
+        num_straight_commas = ll.count('、')
+        if num_straight_commas > max_com:
+            max_com = num_straight_commas
+        num_full_stops = ll.count('。')
+        msg = 'num_curl=' + str(num_curly_commas) + ', num_straight=' + str(num_straight_commas) + ', num_dots=' + str(num_full_stops)
+        #print(msg + ': ' + ll)
+
+#characterize_mirror_punctuation()
+#characterize_stelae_punctuation()
+
 process_all_data_sets()
 #test_multi_dataset_processor() #-----
 #test_list_of_chars_for_lhan_data()

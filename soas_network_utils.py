@@ -8,7 +8,8 @@ from pyvis.network import Network
 from pyvis.options import EdgeOptions
 
 exception_chars = ['之', '兮', '乎', '也', '矣', '焉']
-punctuation = ['》', '！', '？', '?', '”', '］', '＝', '『', '』', '，', '、', '×', '＊', '○', '々', '/', ' ', '…', '※']
+punctuation = ['》', '！', '？', '?', '”', '］', '＝', '『', '』', '，', '、', '×', '＊', '○', '々', '/', ' ', '…', '※',
+               '（', '】']
 #if '，' in marker or '、' in marker or '＊' in marker or '×' in marker or '？' in marker:
 #zi == '》' or zi == '！' or zi == '？':
 #IMPORTANT

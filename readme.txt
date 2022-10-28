@@ -9,6 +9,7 @@ The code was written using Python 3.6.8 on Windows 10/cygwin
 	anytree, v2.8.0
 	cydifflib, v1.0.1
 	infomap, v2.3.0
+	llist, v0.7.1
 	matplotlib, v3.3.4
 	networkx, v2.5
 	nx_altair, v0.1.6

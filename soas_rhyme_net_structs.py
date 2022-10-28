@@ -176,10 +176,17 @@ class stanza_processor:
             return get_rhyme_words_for_kmss2015_mirror_inscription(self.stanza_id, self.stanza_str, self.every_line_rhymes,self.temp_naive_output_file)
 
         stanza = self.stanza_str.split('。')
+        if stanza[len(stanza)-1] == '': # if the last member of the stanza list is empty, remove it
+            stanza.pop()
         line_inc = 0
         modulo = 2
         if self.every_line_rhymes:
             modulo = 1
+        # force doublets to rhyme (i.e., each line rhymes; AA)
+        if len(stanza) == 2:
+            modulo = 1
+        # force triplets to rhyme as AXA
+        num_lines = len(stanza)
         for line in stanza:
             if not line.strip() or line[len(line)-1] == '：':
                 continue
@@ -188,10 +195,11 @@ class stanza_processor:
             line_inc += 1
             line_id = self.stanza_id + '.' + str(line_inc)
             # if this is a rhyming line...
-            if not line_inc % modulo:
+            # (num_lines == 3 and line_inc % modulo) => force triplets to rhyme as AXA
+            if (num_lines == 3 and bool(line_inc % modulo)) or (num_lines != 3 and not line_inc % modulo):
                 zi = line[len(line) - 1]  # get the rhyming word
                 zi_pos = len(line) - 1  # get the rhyming word's position
-                if zi == '々': # get the character preceeding 々
+                if zi == '々' or zi == 'ゝ': # get the character preceeding 々
                     zi = line[len(line) - 2]
                     zi_pos -= 1
                 if zi == ')' or zi == '）':
@@ -440,17 +448,26 @@ def get_rhyme_words_for_kmss2015_mirror_inscription(unique_id, inscription, ever
         #    return retval
         inscription = inscription.replace('。', '')
         inscription = inscription.split('，')
+        if inscription[len(inscription)-1] == '':
+            inscription.pop()
         line_inc = 0
         line_id = ''
         modulo = 2
         if every_line_rhymes:
             modulo = 1
 
+        # force doublets to rhyme as AA
+        if len(inscription) == 2:
+            modulo = 1
+        num_lines = len(inscription)
+        if num_lines > 2:
+            x = 1
         for i in inscription:
             last_char = grab_last_character_in_line(i)
             line_inc += 1
             line_id = unique_id + '.' + str(line_inc)
-            if not line_inc % modulo: # even lines if 'every_line_rhymes' = True, all lines otherwise
+            #if not line_inc % modulo: # even lines if 'every_line_rhymes' = True, all lines otherwise
+            if (num_lines == 3 and bool(line_inc % modulo)) or (num_lines != 3 and not line_inc % modulo):
                 if last_char:
                     char_pos = last_char[1]
                     last_char = last_char[0]
@@ -467,7 +484,7 @@ def get_rhyme_words_for_kmss2015_mirror_inscription(unique_id, inscription, ever
                     last_char = ''
                     char_pos = ''
                     continue
-                if last_char == '々': # get the character preceeding 々
+                if last_char == '々' or last_char == 'ゝ': # get the character preceeding 々
                     #zi = line[len(line) - 2]
                     char_pos -= 1
                     last_char = i[char_pos]
@@ -528,7 +545,7 @@ def grab_last_character_in_line(line):
 # input data should be of the format:
 # key = '鄉'
 # value = ['hian']
-if 0:
+if 1:
     def create_tree(test_data_dict):
         funct_name = 'create_tree()'
         root_node = Node("root")
