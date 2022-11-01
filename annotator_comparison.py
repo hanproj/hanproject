@@ -662,13 +662,16 @@ def get_colors_for_poem_line(line, is_verbose=False):
 an_poem2filename = {}
 an_poem2filename['received_shi'] = {'naive':'naively_annotated_Lu_1983_先秦漢魏晉南北朝詩.txt',
                             'schuessler':'schuessler_annotated_Lu_1983_先秦漢魏晉南北朝詩.txt',
-                            'com_det':'com_det_annotated_Lu_1983_先秦漢魏晉南北朝詩.txt'}
+                            'com_det':'com_det_annotated_received-shi_data.txt'}
+                            #'com_det':'com_det_annotated_Lu_1983_先秦漢魏晉南北朝詩.txt'}
 an_poem2filename['mirrors'] =  {'naive':'naively_annotated_kyomeishusei2015_han_mirror_data.txt',
                        'schuessler':'schuessler_annotated_kyomeishusei2015_han_mirror_data.txt',
-                       'com_det':'com_det_annotated_kyomeishusei2015_han_mirror_data.txt'}
+                        'com_det':'com_det_annotated_mirrors_data.txt'}
+                       #'com_det':'com_det_annotated_kyomeishusei2015_han_mirror_data.txt'}
 an_poem2filename['stelae'] = {'naive':'naively_annotated_毛遠明 《漢魏六朝碑刻校注》.txt',
-                      'schuessler':'schuessler_annotated_毛遠明 《漢魏六朝碑刻校注》.txt',
-                      'com_det':'com_det_annotated_毛遠明 《漢魏六朝碑刻校注》.txt'}
+                      'schuessler':'schuessler_annotated_毛遠明 《漢魏六朝碑刻校注》.txt',#
+                      'com_det':'com_det_annotated_stelae_data.txt'}
+                      #'com_det':'com_det_annotated_毛遠明 《漢魏六朝碑刻校注》.txt'}
 def get_annotated_poem_data_filename(annotator_type, data_type):
     funct_name = 'get_annotated_poem_data_filename()'
     retval = ''
@@ -693,11 +696,15 @@ def readin_annotated_poem_data(annotator_type, data_type):
     for d in data:
         #print(d)
         #continue
+        splitter = ''
         if '：' in d:
             splitter = '： '
         elif ':' in d:
             splitter = ': '
-        d = d.split(splitter)
+        try:
+            d = d.split(splitter)
+        except ValueError:
+            x = 1
         try:
             retval[d[0]] = d[1]
         except IndexError as ie:
@@ -715,7 +722,7 @@ def test_readin_annotated_poem_data():
 
 def test_compare_data_sets():
     funct_name = 'test_compare_data_sets()'
-    data_type = 'stelae' #'stelae'#'received_shi'
+    data_type = 'received_shi'#'mirrors' #'stelae'#'received_shi'
     compare_annotation_between_different_annotators(data_type)
 
 def get_poem_base_id2poem_content_dict(poem_id2poem_line_d):
@@ -1138,6 +1145,7 @@ if run_gui:
         window = Ui()
         app.exec_()
 else:
-    test_compare_data_sets()
+    if 0:
+        test_compare_data_sets()
     #test_readin_annotated_poem_data()
     #test_print_out_poems_given_ids()

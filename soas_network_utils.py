@@ -6,7 +6,9 @@ import codecs
 import re
 from pyvis.network import Network
 from pyvis.options import EdgeOptions
+from hanproj_filename_depot import filename_depot
 
+filename_storage = filename_depot()
 exception_chars = ['之', '兮', '乎', '也', '矣', '焉']
 punctuation = ['》', '！', '？', '?', '”', '］', '＝', '『', '』', '，', '、', '×', '＊', '○', '々', '/', ' ', '…', '※',
                '（', '】']
@@ -125,7 +127,7 @@ def get_soas_code_dir():
     return os.path.join('D:' + os.sep + 'Ash', 'SOAS', 'code')
 
 def get_phonological_data_dir():
-    return os.path.join(get_soas_code_dir(), 'hanproj', 'phonological_data')
+    return os.path.join(filename_storage.get_hanproj_dir(), 'phonological_data')
 
 def if_file_exists(filename, funct_name):
     retval = False
@@ -136,11 +138,11 @@ def if_file_exists(filename, funct_name):
     return retval
 
 def get_hanproj_dir():
-    return os.path.join(get_soas_code_dir(), 'hanproj')
+    return filename_storage.get_hanproj_dir()
 
 def readin_most_complete_schuessler_data():
     funct_name = 'readin_most_complete_schuessler_data()'
-    input_file = os.path.join(get_phonological_data_dir(), 'most_complete_schuessler_late_han_data.txt')
+    input_file = os.path.join(filename_storage.get_phonological_data_dir(), 'most_complete_schuessler_late_han_data.txt')
     if not if_file_exists(input_file, funct_name):
         return []
     data = readlines_of_utf8_file(input_file)
@@ -253,7 +255,7 @@ def find_southern_late_han_readings(is_verbose=False):
     funct_name = 'find_southern_late_han_readings()'
     addendum = readin_most_complete_schuessler_data()
     #input_file = os.path.join(get_schuesslerhanchinese_dir(), 'raw', 'SchuesslerTharsen.tsv')
-    input_file = os.path.join(get_hanproj_dir(), 'phonological_data', 'raw', 'SchuesslerTharsen.tsv')
+    input_file = os.path.join(filename_storage.get_hanproj_dir(), 'phonological_data', 'raw', 'SchuesslerTharsen.tsv')
     if not os.path.isfile(input_file):
         print(funct_name + ' ERROR: INVALID input file:')
         print('\t' + input_file)
@@ -294,7 +296,7 @@ def get_schuessler_late_han_data(is_verbose=False):
     funct_name = 'get_schuessler_late_han_data()'
     addendum = readin_most_complete_schuessler_data()
     #input_file = os.path.join(get_schuesslerhanchinese_dir(), 'raw', 'SchuesslerTharsen.tsv')
-    input_file = os.path.join(get_hanproj_dir(), 'phonological_data', 'raw', 'SchuesslerTharsen.tsv')
+    input_file = os.path.join(filename_storage.get_hanproj_dir(), 'phonological_data', 'raw', 'SchuesslerTharsen.tsv')
     if not os.path.isfile(input_file):
         print(funct_name + ' ERROR: INVALID input file:')
         print('\t' + input_file)
@@ -747,7 +749,7 @@ class rhyme_color_tracker:
 def test_readin_community_detection_group_descriptions():
     funct_name = 'test_readin_community_detection_group_descriptions()'
     #input_file = os.path.join(get_hanproj_dir(), 'hanproject','com_detection_lu1983_received_shi_data_output.txt')
-    input_file = os.path.join(get_hanproj_dir(), 'hanproject', 'com_detection_kyomeishusei2015_mirror_data_output.txt')
+    input_file = os.path.join(filename_storage.get_hanproj_dir(), 'hanproject', 'com_detection_kyomeishusei2015_mirror_data_output.txt')
     desired_groups = []
     rw2group_dict, group2rw_list = readin_community_detection_group_descriptions(input_file, desired_groups)
     for g in group2rw_list:
@@ -960,6 +962,8 @@ def get_rhyme_word_and_marker_from_line_of_poem(line):
     marker = ''
     if '中夜奄喪，□□□' in line:
         x = 1
+    if '･' in line:
+        x = 1
 
     orig_line = line # debug only
     line = strip_poem_id_from_line(line)
@@ -974,7 +978,7 @@ def get_rhyme_word_and_marker_from_line_of_poem(line):
         rw_pos -= 1
         rhyme_word = line[rw_pos]
 
-    if rhyme_word == '□' or rhyme_word == '…' or rhyme_word == '･' or rhyme_word == '，':
+    if rhyme_word == '□' or rhyme_word == '…' or rhyme_word == '･' or rhyme_word == '，' or marker == '･':
         return ('', '')
     #
     # Handle Schuessler's LHan, i.e., by pass the '({pronunciation})'.
@@ -1162,6 +1166,7 @@ def create_latex_table_for_poem(poem):
     return retval
 
 
+# this won't work if downloaded from GitHub (the directory structure doesn't work)
 def test_strip_poem_id_from_lines_of_poem():
     funct_name = 'test_strip_poem_id_from_lines_of_poem()'
     filename = os.path.join(get_soas_code_dir(), 'utils', 'poem_data.txt')
@@ -1212,7 +1217,7 @@ def load_late_han_data():
     funct_name = 'load_late_han_data()'
     #most_complete_schuessler_late_han_data.txt
     retval = {}
-    input_file = os.path.join(get_phonological_data_dir(), 'most_complete_schuessler_late_han_data.txt')
+    input_file = os.path.join(filename_storage.get_phonological_data_dir(), 'most_complete_schuessler_late_han_data.txt')
     if not if_file_exists(input_file, funct_name):
         return retval
     input_lines = readlines_of_utf8_file(input_file)
@@ -1412,7 +1417,7 @@ def if_file_exists(filename, funct_name):
 
 def readin_most_complete_schuessler_data():
     funct_name = 'readin_most_complete_schuessler_data()'
-    input_file = os.path.join(get_phonological_data_dir(), 'most_complete_schuessler_late_han_data.txt')
+    input_file = os.path.join(filename_storage.get_phonological_data_dir(), 'most_complete_schuessler_late_han_data.txt')
     retval = {}
     if not if_file_exists(input_file, funct_name):
         return retval

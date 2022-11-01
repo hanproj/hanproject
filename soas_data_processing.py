@@ -55,9 +55,9 @@ from soas_rnetwork_test import get_timestamp_for_filename
 from soas_rnetwork_test import delete_file_if_it_exists
 from soas_rnetwork_test import print_debug_message
 from soas_imported_from_py3 import readlines_of_utf8_file
-from soas_imported_from_py3 import get_soas_code_dir
-from soas_imported_from_py3 import get_phonological_data_dir
-from soas_imported_from_py3 import get_hanproj_dir
+#from soas_imported_from_py3 import get_soas_code_dir
+#from soas_imported_from_py3 import get_phonological_data_dir
+#from soas_imported_from_py3 import get_hanproj_dir
 from soas_network_utils import load_schuessler_data
 from soas_network_utils import lhan_initials
 from soas_network_utils import aspiration
@@ -103,6 +103,7 @@ from soas_rhyme_net_structs import get_rhyme_words_for_kmss2015_mirror_inscripti
 from soas_rhyme_net_structs import grab_last_character_in_line
 from pyvis.network import Network
 from pyvis.options import EdgeOptions
+from annotator_comparison import compare_annotation_between_different_annotators
 #import PyQt5
 #from PIL import Image
 #from PIL.Image import core as _imaging
@@ -1485,7 +1486,7 @@ def parse_han_data_from_lu_1983():
     is_verbose = False
     delim = '\t'
     line_return ='\n'
-    output_file = os.path.join(get_received_shi_dir(), 'parsed-Lu-1983-先秦漢魏晉南北朝詩.txt')
+    output_file = os.path.join(filename_storage.get_received_shi_dir(), 'parsed-Lu-1983-先秦漢魏晉南北朝詩.txt')
     # if output file already exists, delete it
     if os.path.isfile(output_file):
         os.remove(output_file)
@@ -2253,7 +2254,7 @@ class multi_dataset_processor:
     def create_pyvis_network_graph_for_mirrors_com_detected_data(self):
         funct_name = 'create_pyvis_network_graph_for_mirrors_com_detected_data()'
         print('Begin ' + funct_name)
-        com_det_file = os.path.join(get_hanproj_dir(), 'hanproject', 'com_detection_kyomeishusei2015_mirror_data_output.txt')
+        com_det_file = os.path.join(filename_storage.get_hanproj_dir(), 'hanproject', 'com_detection_kyomeishusei2015_mirror_data_output.txt')
         desired_groups = []
         mirror_rnet = self.get_network_object('network', 'naive', 'mirrors')
         mirror_rnet.create_pyvis_network_by_coloring_pre_com_det_data_w_com_det_groups('Pre-Com Det Mirror Data with Coloring', com_det_file, desired_groups)
@@ -2296,7 +2297,7 @@ class multi_dataset_processor:
     def create_pyvis_network_graph_for_received_shi_com_detected_data(self):
         funct_name = 'create_pyvis_network_graph_for_received_shi_com_detected_data()'
         #com_det_file = os.path.join(get_hanproj_dir(), 'hanproject', 'com_detection_lu1983_received_shi_data_output.txt')
-        com_det_file = os.path.join(get_hanproj_dir(), 'hanproject', 'com_det_annotated_received-shi_graph_data.txt')
+        #com_det_file = os.path.join(filename_storage.get_hanproj_dir(), 'hanproject', 'com_det_annotated_received-shi_graph_data.txt')
         com_det_file = self.filename_storage.get_filename_for_com_det_network_data('graph', 'com_det', 'received_shi')
         desired_groups = []
         received_net = self.get_network_object('network', 'naive', 'received_shi')
@@ -2304,9 +2305,9 @@ class multi_dataset_processor:
 
     def create_pyvis_network_graph_for_stelae_com_detected_data(self):
         funct_name = 'create_pyvis_network_graph_for_stelae_com_detected_data()'
-        com_det_file = os.path.join(get_hanproj_dir(), 'hanproject',
-                                    'com_detection_mao_2008_stelae_data_output.txt')
-        com_det_file = os.path.join(get_hanproj_dir(), 'stelae', 'com_det_annotated_stelae_graph_data.txt')
+        #com_det_file = os.path.join(get_hanproj_dir(), 'hanproject',
+        #                            'com_detection_mao_2008_stelae_data_output.txt')
+        com_det_file = os.path.join(filename_storage.get_hanproj_dir(), 'stelae', 'com_det_annotated_stelae_graph_data.txt')
         desired_groups = []
         stelae_rnet = self.get_network_object('network', 'naive', 'stelae')
         stelae_rnet.create_pyvis_network_by_coloring_pre_com_det_data_w_com_det_groups('Pre-Com Det Stelae Data with Coloring',
@@ -2580,9 +2581,9 @@ class multi_dataset_processor:
         #
         # annotate Lu1983 poems with community detection
         print_debug_msgs = True
-        every_line_rhymes = True # False: every other line rhymes, True: every line rhymes
-        if data_type == 'received_shi' or data_type == 'mirrors':
-            every_line_rhymes = False
+        every_line_rhymes = False # False: every other line rhymes, True: every line rhymes
+        #if data_type == 'received_shi' or data_type == 'mirrors':
+        #    every_line_rhymes = False
 
         #
         # Readin input data
@@ -2636,8 +2637,26 @@ class multi_dataset_processor:
                         stanza_id = k
                 except KeyError as ke:
                     x = 1
+
+                stanza = convert_punctuation(stanza, data_type)
                 stanza_proc.input_stanza(stanza, stanza_id, every_line_rhymes)
-                cd_annotated_stanza, rw_list = stanza_proc.annotate_with_combo_community_detection()
+
+                if stanza.count(' ') > 0: # this is a sign that the original poem wasn't punctuated (and therefore
+                                          #   should be skipped)
+                    cd_annotated_stanza = []
+                    rw_list = []
+                else:
+                    cd_annotated_stanza, rw_list = stanza_proc.annotate_with_combo_community_detection()
+                if not cd_annotated_stanza: # if there are no rhymes in the stanza...
+                    smsg = stanza_id
+                    if data_type != 'stelae':
+                         smsg += '.1'
+                    smsg += '： ' + stanza
+                    append_line_to_output_file(output_file, smsg)
+                    continue
+
+
+                #cd_annotated_stanza, rw_list = stanza_proc.annotate_with_combo_community_detection()
                 #
                 # Write annotations out to file
                 if data_type == 'received_shi':
@@ -3108,10 +3127,10 @@ class multi_dataset_processor:
 
         s_annotator.reset()
 
-        every_line_rhymes = True  # False -> assumed to rhyme every other line, starting with the second line
+        every_line_rhymes = False  # False -> assumed to rhyme every other line, starting with the second line
                                   # True -> every line rhymes, starting with the first line
-        if data_type == 'received_shi' or data_type == 'mirrors':
-            every_line_rhymes = False
+        #if data_type == 'received_shi' or data_type == 'mirrors':
+        #    every_line_rhymes = False
 
         #
         # Readin input data
@@ -3200,7 +3219,12 @@ class multi_dataset_processor:
                 #
                 #   For Naive Annotator
                 temp_file = filename_storage.get_filename_for_temp_naively_annotated_data(data_type)
-                annotated_stan, rijm_lijst = stanza_proc.naively_annotate(temp_file)
+                if stanza.count(' ') > 0: # this is a sign that the original poem wasn't punctuated (and therefore
+                                          #   should be skipped)
+                    annotated_stan = []
+                    rijm_lijst = []
+                else:
+                    annotated_stan, rijm_lijst = stanza_proc.naively_annotate(temp_file)
                 #
                 if not annotated_stan: # if there are no rhymes in the stanza...
                     append_line_to_output_file(naive_output, stanza_id + '： ' + stanza)
@@ -3399,7 +3423,7 @@ def handle_paren_x(line, x):
 
 def get_schuessler_late_han_addendum_data(is_verbose=False):
     funct_name = 'get_schuessler_late_han_addendum_data()'
-    input_file = os.path.join(get_phonological_data_dir(), 'missing_schuessler_char_list3.txt')
+    input_file = os.path.join(filename_storage.get_phonological_data_dir(), 'missing_schuessler_char_list3.txt')
     if not if_file_exists(input_file, funct_name):
         return
     line_list = readlines_of_utf8_file(input_file)
@@ -4088,11 +4112,11 @@ def is_multibyte_unicode(test_ord):
     return retval
 
 def get_raw_bentley_2015_filename():
-    return os.path.join(get_soas_code_dir(),'hanproj','phonological_data', 'raw','bentley_2015.txt')
+    return os.path.join(filename_storage.get_soas_code_dir(),'hanproj','phonological_data', 'raw','bentley_2015.txt')
 
 def get_parsed_bentley_2015_late_han_data():
     funct_name = 'get_parsed_bentley_2015_late_han_data()'
-    input_file = os.path.join(get_soas_code_dir(),'hanproj','phonological_data','parsed_bentley_2015_late_han_data.txt')
+    input_file = os.path.join(filename_storage.get_soas_code_dir(),'hanproj','phonological_data','parsed_bentley_2015_late_han_data.txt')
     if not os.path.isfile(input_file):
         print(funct_name + ' ERROR: Invalid input file: ' + input_file)
         print('\tAborting.')
@@ -4110,7 +4134,7 @@ def parse_bentley_2015(is_verbose=False):
     funct_name = 'parse_bentley_2015()'
     start_tag ='geographical list of provinces, districts, and villages, often with'
     input_file = get_raw_bentley_2015_filename()
-    output_file = os.path.join(get_soas_code_dir(),'hanproj','phonological_data','parsed_bentley_2015_late_han_data.txt')
+    output_file = os.path.join(filename_storage.get_soas_code_dir(),'hanproj','phonological_data','parsed_bentley_2015_late_han_data.txt')
     if os.path.isfile(output_file):
         os.remove(output_file)
     if not os.path.isfile(input_file):
@@ -4206,7 +4230,7 @@ def parse_bentley_2015(is_verbose=False):
 
 def readin_preparsed_schuessler_late_han_data():
     funct_name = 'readin_preparsed_schuessler_late_han_data()'
-    input_file = os.path.join(get_hanproj_dir(), 'phonological_data', 'parsed_schuessler_2007_data.txt')
+    input_file = os.path.join(filename_storage.get_hanproj_dir(), 'phonological_data', 'parsed_schuessler_2007_data.txt')
     if not os.path.isfile(input_file):
         print(funct_name + ' ERROR: Invalid input file: ' + input_file)
         print('\tAborting.')
@@ -4230,7 +4254,7 @@ def readin_preparsed_schuessler_late_han_data():
 def create_schuessler_late_han_data_file():
     funct_name = 'create_schuessler_late_han_data_file()'
     schuessler = get_schuessler_late_han_data()
-    output_file = os.path.join(get_hanproj_dir(), 'phonological_data', 'parsed_schuessler_2007_data.txt')
+    output_file = os.path.join(filename_storage.get_hanproj_dir(), 'phonological_data', 'parsed_schuessler_2007_data.txt')
     data_str = ''
     if os.path.isfile(output_file): # if the output file already exists, delete it
         os.remove(output_file)
@@ -4276,7 +4300,7 @@ def create_schuessler_plus_bentley_2015_file():
     funct_name = 'create_schuessler_plus_bentley_2015_file()'
     schuessler = readin_preparsed_schuessler_late_han_data()#get_schuessler_late_han_data()
     bentley = get_parsed_bentley_2015_late_han_data()#parse_bentley_2015()
-    output_file = os.path.join(get_soas_code_dir(), 'hanproj', 'phonological_data', 'combo_schuessler2007_n_bentley2015.txt')
+    output_file = os.path.join(filename_storage.get_soas_code_dir(), 'hanproj', 'phonological_data', 'combo_schuessler2007_n_bentley2015.txt')
     if os.path.isfile(output_file):
         os.remove(output_file)
     label_list = ['wf_graph','wf_pinyin', 'QY_IPA', 'LH_IPA', 'OCM_IPA']
@@ -4322,7 +4346,7 @@ def readin_schuessler_n_bentley_late_han_data(is_verbose=False):
 
 def readin_schuessler2007_n_bentley2015_combo():
     funct_name = 'readin_schuessler2007_n_bentley2015_combo()'
-    input_file = os.path.join(get_soas_code_dir(), 'hanproj', 'phonological_data', 'combo_schuessler2007_n_bentley2015.txt')
+    input_file = os.path.join(filename_storage.get_soas_code_dir(), 'hanproj', 'phonological_data', 'combo_schuessler2007_n_bentley2015.txt')
     if not os.path.isfile(input_file):
         print(funct_name + ' ERROR: Invalid input file:' + input_file)
         print('\tAborting.')
@@ -4491,14 +4515,14 @@ def get_data_from_pos(string, position, delim):
 def add_missing_schuessler_data_to_most_complete():
     funct_name = 'add_missing_schuessler_data_to_most_complete()'
     addendum = get_schuessler_late_han_addendum_data()
-    output_file = os.path.join(get_phonological_data_dir(), 'most_complete_schuessler_late_han_data.txt')
+    output_file = os.path.join(filename_storage.get_phonological_data_dir(), 'most_complete_schuessler_late_han_data.txt')
     for k in addendum:
         msg_out = k + '\t' + ' '.join(addendum[k])
         append_line_to_utf8_file(output_file, msg_out)
 
 def create_need_shengfu_file():
     funct_name = 'create_need_shengfu_file()'
-    output_file = os.path.join(get_phonological_data_dir(), 'need_shengfu_file.txt')
+    output_file = os.path.join(filename_storage.get_phonological_data_dir(), 'need_shengfu_file.txt')
     delete_file_if_it_exists(output_file)
     mlist = '埆韻洧鑒澎辻勛神漳驤溏紋喚巇趺痴婿廎毹尫晴鎔樣滓紜衫㲹圢暟炅榷炯皚讖蹤叺湏嬆璘𣧑𥚝鄹昶淇踏駬乕盒轃厘花沄嵗俌傐頁了瘢嗤㜰箏靂廿祑澍卅廂裡箋鄒崎篌璫㐬蒂貎稀斦祤'
     mlist = list(set(mlist))
@@ -4508,7 +4532,7 @@ def create_need_shengfu_file():
 def combine_schuessler_bentley_n_addendum(is_verbose=False):
     funct_name = 'combine_schuessler_bentley_n_addendum()'
     addendum = get_schuessler_late_han_addendum_data()
-    output_file = os.path.join(get_phonological_data_dir(), 'most_complete_schuessler_late_han_data.txt')
+    output_file = os.path.join(filename_storage.get_phonological_data_dir(), 'most_complete_schuessler_late_han_data.txt')
     delete_file_if_it_exists(output_file)
     snb = readin_schuessler_n_bentley_late_han_data()
     for k in addendum:
@@ -5129,7 +5153,7 @@ class schuessler_stanza_annotator:
 
 def test_readin_network_in_pajek_format_and_return_pyvis_network():
     funct_name = 'test_readin_network_in_pajek_format_and_return_pyvis_network()'
-    input_file = os.path.join(get_hanproj_dir(), 'received-shi', 'nodes_n_edges_annotated_received_shi_pre_com_det.txt')
+    input_file = os.path.join(filename_storage.get_hanproj_dir(), 'received-shi', 'nodes_n_edges_annotated_received_shi_pre_com_det.txt')
 
     heading = 'Pre-Community Detection Received Shi'
     min_node_weight = 1 # don't print nodes with a node weight of less than this
@@ -5440,6 +5464,19 @@ def process_all_data_sets():
         message2user('\tDone (' + str(get_timestamp()) + ').', is_verbose)
         message2user('Done (' + str(get_timestamp()) + ').', is_verbose)
 
+    # compute annotator comparison statistics
+    message2user('Computing annotator comparision statistics:', is_verbose)
+    message2user('\tFor received shi...', is_verbose)
+    compare_annotation_between_different_annotators('received_shi')
+    message2user('\tDone (' + str(get_timestamp()) + ').', is_verbose)
+    message2user('\tFor mirrors...', is_verbose)
+    compare_annotation_between_different_annotators('mirrors')
+    message2user('\tDone (' + str(get_timestamp()) + ').', is_verbose)
+    message2user('\tFor stelae...', is_verbose)
+    compare_annotation_between_different_annotators('stelae')
+    message2user('\tDone (' + str(get_timestamp()) + ').', is_verbose)
+    message2user('Done (' + str(get_timestamp()) + ').', is_verbose)
+
 def get_timestamp():
     return datetime.datetime.now().strftime("%A, %d %B %Y @ %I:%M%p")
 
@@ -5544,7 +5581,22 @@ def characterize_mirror_punctuation():
 
 #characterize_mirror_punctuation()
 #characterize_stelae_punctuation()
+def test_annatator_comparison():
+    # compute annotator comparison statistics
+    is_verbose = True
+    message2user('Computing annotator comparision statistics:', is_verbose)
+    message2user('\tFor received shi...', is_verbose)
+    compare_annotation_between_different_annotators('received_shi')
+    message2user('\tDone (' + str(get_timestamp()) + ').', is_verbose)
+    message2user('\tFor mirrors...', is_verbose)
+    compare_annotation_between_different_annotators('mirrors')
+    message2user('\tDone (' + str(get_timestamp()) + ').', is_verbose)
+    message2user('\tFor stelae...', is_verbose)
+    compare_annotation_between_different_annotators('stelae')
+    message2user('\tDone (' + str(get_timestamp()) + ').', is_verbose)
+    message2user('Done (' + str(get_timestamp()) + ').', is_verbose)
 
+#test_annatator_comparison()
 process_all_data_sets()
 #test_multi_dataset_processor() #-----
 #test_list_of_chars_for_lhan_data()
