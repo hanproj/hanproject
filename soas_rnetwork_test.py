@@ -554,7 +554,12 @@ class rnetwork: # rhyme network
             retval = self.node_dict[zi].get_node_weight()
         return retval
 
+    def is_node_already_in_network(self, zi):
+        return zi in self.node_dict
+
     def add_node(self, zi, poem_stanza_num, raw_line, late_han_rhyme=''):
+        if '履' in zi:
+            x = 1
         if zi.isdigit():
             return
         if is_kana_letter(zi):
@@ -575,6 +580,8 @@ class rnetwork: # rhyme network
     def add_edge(self, first_rhyme_word, sec_rhyme_word, num_rhymes_in_stanza, poem_stanza_num, debug_msg=''):
         #NOTE: could change this so that it just adds the NODEs, but they're supposed to be there already
         is_verbose = False
+        if '履' in first_rhyme_word or '履' in sec_rhyme_word:
+            x = 1
         if first_rhyme_word == sec_rhyme_word:
             return
         if not first_rhyme_word.strip() or not sec_rhyme_word.strip():

@@ -72,6 +72,9 @@ class filename_depot:
 
     def get_phonological_data_dir(self):
         return os.path.join(self.get_hanproj_dir(), 'phonological_data')
+
+    def get_datafile_for_paths_optimized_by_hand(self):
+        return os.path.join(self.get_hanproj_dir(), 'stelae', 'stelae_poems_with_lhan NH.txt')
     #
     # NOTE:
     #  for now using existing filenames. For the re-write, these will be standardized.
@@ -106,6 +109,9 @@ class filename_depot:
         data_type = self.modify_data_type_for_filename(data_type)
         filename = annotator_type + '_annotated_' + data_type + '_' + network_type + '_data.txt'
         return os.path.join(self.get_hanproj_dir(), data_type, filename)
+
+    def get_filename_for_combo_com_det_network_data(self):
+        return os.path.join(self.get_hanproj_dir(), 'combo', 'com_det_annotated_combo_graph_data.txt')
 
     def get_filename_for_com_det_network_data(self, network_type, annotator_type, data_type):
         funct_name = 'get_filename_for_com_det_network_data()'

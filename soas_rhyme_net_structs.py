@@ -100,6 +100,7 @@ class stanza_processor:
 
     def get_late_han(self, glyph):
         retval = ''
+        num = ord(glyph)
         if glyph in self.glyph2late_han:
             retval = self.glyph2late_han[glyph]
 
@@ -121,7 +122,7 @@ class stanza_processor:
         #annotated_stanza, rw_list = self.naively_annotate() # instead of using thi, write results out to file, and use that
         annotated_stanza, rw_list = self.re_use_naively_annotated_data()
         filename_storage = filename_depot()
-        com_det_file = filename_storage.get_filename_for_combined_data_community_detection()
+        com_det_file = filename_storage.get_filename_for_combo_com_det_network_data()
 #        com_det_file = get_com_det_group_descriptions_for_combo_data()
         desired_groups = [] # if empty, it gets all groups
         rw2group_dict, group2rw_list = readin_community_detection_group_descriptions(com_det_file, desired_groups)
@@ -129,8 +130,6 @@ class stanza_processor:
         group_id_pos = 0
         cd_annotated_stanza = [] # cd = com det
         for nas in annotated_stanza:
-            if '唌々' in nas:
-                x = 1
             if 'a' in nas: # the naively annotated stanza always (Not always! Yes! always!) uses 'a' to mark rhymes
                 nas = nas.split('a')
                 rw = nas[1][0]
@@ -190,8 +189,6 @@ class stanza_processor:
         for line in stanza:
             if not line.strip() or line[len(line)-1] == '：':
                 continue
-            #if '沒□□□' in line:
-            #    x = 1
             line_inc += 1
             line_id = self.stanza_id + '.' + str(line_inc)
             # if this is a rhyming line...
@@ -199,6 +196,13 @@ class stanza_processor:
             if (num_lines == 3 and bool(line_inc % modulo)) or (num_lines != 3 and not line_inc % modulo):
                 zi = line[len(line) - 1]  # get the rhyming word
                 zi_pos = len(line) - 1  # get the rhyming word's position
+                if len(line) > 1:
+                    zi_before_rw = line[len(line)-2]
+                else:
+                    zi_before_rw = ''
+                if zi == '兮' and zi_before_rw == '》':
+                    zi_pos -= 2
+                    zi = line[zi_pos]
                 if zi == '々' or zi == 'ゝ': # get the character preceeding 々
                     zi = line[len(line) - 2]
                     zi_pos -= 1
@@ -270,11 +274,24 @@ class stanza_processor:
                     annotated_stanza.append(dl)
         return annotated_stanza, rw_list
 
-    def schuessler_annotate(self):
+    def is_fayin_path_calculated_by_hand(self, rw_list):
+        calculated_by_hand = ['045', '060', '067', '133']
+        current_id = rw_list[0][3]
+        num = current_id.split('.')[1]
+        x = num in calculated_by_hand
+        return x
+
+    def schuessler_annotate(self, label=''):
         funct_name = 'schuessler_annotate()'
         print_debug_msgs = True
         annotated_stanza, rw_list = self.re_use_naively_annotated_data()#self.naively_annotate()
+        debug_output = 'schuessler_calculation_stats.txt'
+        delete_file_if_it_exists(debug_output)
         rw_pos = 0
+        filename_storage = filename_depot()
+        # lh_fayin_path:
+        # : ['pouᶜ', 'leŋ', 'deiᶜ', 'tɑt', 'sim', 'mieŋᶜ', 'źok', 'ńit', 'dzə', 'moᴮ', 'śauᶜ', 'giɑmᴮ', 'dzieŋ', 'ŋiɑi', 'miaŋ', 'dźinᶜ']
+
         #
         # Calculate optimized rhyme path for rhyme words
         lh_fayin_dict = {}
@@ -287,8 +304,6 @@ class stanza_processor:
         for rw_word in raw_rw_list:
             if rw_word not in lh_fayin_dict:
                 lh_fayin_dict[rw_word] = []
-            if rw_word == '土':
-                x = 1
             lhan_list = self.get_late_han(rw_word)  # possibly has multiple readings
             for lh in lhan_list:
                 if lh not in lh_fayin_dict[rw_word]:
@@ -305,27 +320,44 @@ class stanza_processor:
         #end_time = timer()
         #print('\tTime elapsed:')
         #print('\t\t' + str(timedelta(seconds=end_time - start_time)))
-
-        #append_pad_list_data_to_file(debug_file, pad_list, True) # DEBUG ONLY
-        print('Calculating all possible pronunciation paths, starting at:')
-        print('\t' + strftime("%Y-%m-%d %H:%M:%S", gmtime()))
-        num_readings = 0
-        for c in lh_fayin_dict:
-            num_readings += len(lh_fayin_dict[c])
-        print('\t' + str(len(lh_fayin_dict)) + ' rhyming words, and ' + str(num_readings) + ' readings.')
-        start_time = timer()
-        pad_list = get_list_of_fayin_paths(lh_fayin_dict) # replaces library
-        end_time = timer()
-        print('\tTime elapsed:')
-        print('\t\t' + str(timedelta(seconds=end_time - start_time)))
-        print(str(len(pad_list)) + ' possible paths.')
-        print('')
-        print('Calculating optimized path:')
-        start_time = timer()
-        lh_fayin_path = find_path_optimized_for_rhyme(pad_list)
-        end_time = timer()
-        print('\tTime elapsed:')
-        print('\t\t' + str(timedelta(seconds=end_time - start_time)))
+        #if self.is_fayin_path_calculated_by_hand(rw_list):
+        if is_poem_num_optimized_by_hand(rw_list):
+            current_id = rw_list[0][3]
+            num = current_id.split('.')[1]
+            lh_fayin_path = get_lh_fayin_path_given_poem_num(num)
+            print('Pronunciation path calculated by hand. Results read in from file.')
+        else:
+            #append_pad_list_data_to_file(debug_file, pad_list, True) # DEBUG ONLY
+            print('Calculating all possible pronunciation paths, starting at:')
+            print('\t' + strftime("%Y-%m-%d %H:%M:%S", gmtime()))
+            num_readings = 0
+            num_paths = 1
+            for c in lh_fayin_dict:
+                num_readings += len(lh_fayin_dict[c])
+                num_paths *= len(lh_fayin_dict[c])
+            num_rw_msg = str(len(lh_fayin_dict)) + ' rhyming words, and ' + str(num_readings) + ' readings. '
+            num_rw_msg += str(num_paths) + ' pronunciation paths.'
+            print('\t' + num_rw_msg)
+            if label:
+                num_rw_msg = label + ': ' + num_rw_msg
+            append_line_to_utf8_file(debug_output, num_rw_msg)
+            start_time = timer()
+            pad_list = get_list_of_fayin_paths(lh_fayin_dict) # replaces library
+            end_time = timer()
+            print('\tTime elapsed:')
+            print('\t\t' + str(timedelta(seconds=end_time - start_time)))
+            path_msg = str(len(pad_list)) + ' possible paths.'
+            if label:
+                path_msg = label + ': ' + path_msg
+            print(path_msg)
+            append_line_to_utf8_file(debug_output, path_msg)
+            print('')
+            print('Calculating optimized path:')
+            start_time = timer()
+            lh_fayin_path = find_path_optimized_for_rhyme(pad_list)
+            end_time = timer()
+            print('\tTime elapsed:')
+            print('\t\t' + str(timedelta(seconds=end_time - start_time)))
 
         #debug_msg(funct_name, '\tEND pronunciation calculation.', print_debug_msgs)
         rw2lhan_dict = {}
@@ -338,8 +370,6 @@ class stanza_processor:
             except IndexError as ie:
                 #get_user_msg_given_gsr_n_gsc_numbers
                 #get_guangyun_data_for_char
-                # get_gsc_number()
-                # get_gsr_number()
                 gsc_num = get_gsc_number(ck)
                 gsr_num = get_gsr_number(ck)
                 msg = get_user_msg_given_gsr_n_gsc_numbers(gsr_num, gsc_num, ck)
@@ -809,6 +839,66 @@ def test_create_list_of_rhyme_markers():
     for m in markers:
         inc += 1
         print('(' + str(inc) + ') ' + m)
-#test_create_list_of_rhyme_markers()
+
+pnum2lh_fayin_path = {}
+def readin_hand_optimized_path_data():
+    if pnum2lh_fayin_path:
+        return
+    filename_storage = filename_depot()
+    input_file = filename_storage.get_datafile_for_paths_optimized_by_hand()
+    input_data = readlines_of_utf8_file(input_file)
+    # lh_fayin_path:
+    # ['pouᶜ', 'leŋ', 'deiᶜ', 'tɑt', 'sim', 'mieŋᶜ', 'źok', 'ńit', 'dzə', 'moᴮ', 'śauᶜ', 'giɑmᴮ', 'dzieŋ', 'ŋiɑi', 'miaŋ', 'dźinᶜ']
+    is_rhyming_line = False
+    for line in input_data:
+        line_num = int(line.split(': ')[0].split('.')[3])
+        if not line_num % 2: # if even number
+            is_rhyming_line = True
+        else:
+            is_rhyming_line = False
+        if is_rhyming_line:
+            fayin = line.split('。')[1].strip()
+            poem_num = line.split('.')[1]
+            if poem_num not in pnum2lh_fayin_path:
+                pnum2lh_fayin_path[poem_num] = []
+            if fayin.strip():
+                pnum2lh_fayin_path[poem_num].append(fayin)
+
+def is_poem_num_optimized_by_hand(rw_list):
+    readin_hand_optimized_path_data()
+#    def is_fayin_path_calculated_by_hand(self, rw_list):
+#        calculated_by_hand = ['045', '060', '067', '133']
+    current_id = rw_list[0][3]
+    num = current_id.split('.')[1]
+    x = num in pnum2lh_fayin_path
+    return x
+
+    #return poem_num in pnum2lh_fayin_path
+
+def get_lh_fayin_path_given_poem_num(poem_num):
+    readin_hand_optimized_path_data()
+    retval = []
+    try:
+        retval = pnum2lh_fayin_path[poem_num]
+    except:
+        x = 1
+    return retval
+
+def test_get_lh_fayin_path_given_poem_num():
+    funct_name = 'test_get_lh_fayin_path_given_poem_num()'
+    test_cases = ['045', '060', '067', '133', '150']
+    for tc in test_cases:
+        lh_fayin_path = get_lh_fayin_path_given_poem_num(tc)
+        if lh_fayin_path:
+            print('Path for ' + tc)
+            print('\t' + str(lh_fayin_path))
+            print('num rhyme positions: ' + str(len(lh_fayin_path)))
+        else:
+            print('No data for ' + tc)
+#test_get_lh_fayin_path_given_poem_num()
+
+#readin_hand_optimized_path_data()
+
+    #test_create_list_of_rhyme_markers()
 
 #test_late_han_data()

@@ -12,6 +12,7 @@ filename_storage = filename_depot()
 exception_chars = ['之', '兮', '乎', '也', '矣', '焉']
 punctuation = ['》', '！', '？', '?', '”', '］', '＝', '『', '』', '，', '、', '×', '＊', '○', '々', '/', ' ', '…', '※',
                '（', '】']
+no_rhyme_word_l = ['□', '…', '･','，']
 #if '，' in marker or '、' in marker or '＊' in marker or '×' in marker or '？' in marker:
 #zi == '》' or zi == '！' or zi == '？':
 #IMPORTANT
@@ -937,7 +938,7 @@ def test_get_rhyme_groups_from_annotated_poem():
     poem = ['Lu1983.008.1.1： 諸呂用事兮劉氏微。', 'Lu1983.008.1.2： 迫脅王侯兮彊授我a(i)妃。', 'Lu1983.008.1.3： 我妃既妒兮誣我以惡。',
             'Lu1983.008.1.4： 讒女亂國兮上曾不b(ɑ)寤。', 'Lu1983.008.1.5： 我無忠臣兮何故棄國。', 'Lu1983.008.1.6： 自快中野兮蒼天與c(ik)直。',
             'Lu1983.008.1.7： 于嗟不可悔兮寧早自賊。', 'Lu1983.008.1.8： 為王餓死兮誰者d(en)憐之。', 'Lu1983.008.1.9： 呂氏絕理兮托天報仇。']
-    m2rw_list = get_rhyme_groups_from_annotated_poem('\n'.join(poem))
+    m2rw_list = get_rhyme_groups_from_annotated_poem('\n'.join(poem), '\n')
     for m in m2rw_list:
         print(m + ': [' + ''.join(m2rw_list[m]) + ']')
 
@@ -960,11 +961,8 @@ def remove_punctuation_from_end_of_line(line):
 def get_rhyme_word_and_marker_from_line_of_poem(line):
     rhyme_word = ''
     marker = ''
-    if '中夜奄喪，□□□' in line:
-        x = 1
-    if '･' in line:
-        x = 1
-
+    if not does_line_have_rhyme_marker(line):
+        return (rhyme_word, marker)
     orig_line = line # debug only
     line = strip_poem_id_from_line(line)
     #exception_chars = ['之', '兮', '乎', '也', '矣', '焉']
@@ -977,11 +975,16 @@ def get_rhyme_word_and_marker_from_line_of_poem(line):
     if rhyme_word == '」' or rhyme_word == '』':
         rw_pos -= 1
         rhyme_word = line[rw_pos]
+    if rhyme_word == '々' or rhyme_word == 'ゝ':  # get the character preceeding 々
+        rw_pos -= 1
+        rhyme_word = line[rw_pos]
 
-    if rhyme_word == '□' or rhyme_word == '…' or rhyme_word == '･' or rhyme_word == '，' or marker == '･':
+    if any(not_rw in rhyme_word for not_rw in no_rhyme_word_l):
+        return ('', '')
+    if marker == '･' or marker == '。':
         return ('', '')
     #
-    # Handle Schuessler's LHan, i.e., by pass the '({pronunciation})'.
+    # Handle Schuessler's LHan, i.e., bypass the '({pronunciation})'.
     if line[rw_pos-1] == ')': # if schuessler
         m_pos = line.rfind('(') - 1
         marker = line[m_pos]
@@ -1013,9 +1016,6 @@ def get_rhyme_word_and_marker_from_line_of_poem(line):
         rhyme_word = line[len(line)-2]# the rhyme word is the character in front of the exception character
     rw_pos = line.rfind(rhyme_word)
     left = line[:rw_pos] # cut the string in two at the rhyme word
-#    if is_hanzi(left[len(left)-1]): # if there is a chinese character to the left of the rhyme word, then there's no rhyme word
-#        return ('', marker)
-#    else:
     #
     # Handle everything else
     dont_quit = True
@@ -1055,10 +1055,7 @@ def get_rhyme_word_and_marker_from_line_of_poem(line):
                 rhyme_word = ''
             dont_quit = False
         else:
-            #try:
             marker = left[len(left)-1] + marker #
-            #except IndexError as ie:
-            #    x = 1
             left = left[0:len(left)-1] # decrement
     if any(punk in marker for punk in punctuation):
         rhyme_word = ''
@@ -1073,9 +1070,9 @@ def get_rhyme_word_and_marker_from_line_of_poem(line):
 # returns dictionary where:
 #    key = rhyme group marker
 #  value = list of rhyme words
-def get_rhyme_groups_from_annotated_poem(poem):
+def get_rhyme_groups_from_annotated_poem(poem, line_delim='\n'):
     funct_name = 'get_rhyme_groups_from_annotated_poem()'
-    poem = poem.split('\n')
+    poem = poem.split(line_delim)
     retval = {}
     for p in poem:
         rw, m = get_rhyme_word_and_marker_from_line_of_poem(p)
@@ -1433,6 +1430,14 @@ def readin_most_complete_schuessler_data():
         for lh in lhan:
             retval[d[glyph_pos]].append(lh) #append(d[late_han_pos])
     return retval
+
+#
+# INPUT: poem as single string (lines end in '\n')
+def is_poem_annotated(poem):
+    return re.search(r'[a-zA-Zα-ωΑ-Ω]', poem)
+
+def does_line_have_rhyme_marker(line):
+    return is_poem_annotated(line)
 
 def myfunct():
     print('yup. myfunct()')

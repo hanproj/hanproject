@@ -2023,12 +2023,15 @@ def test_multi_dataset_processor():
         else:# run com det processing
             processor.do_not_reprocess_old_data()
             add_com_det = True
-            filename = processor.get_filename_for_annotated_network_data('network', 'naive', 'received_shi')
-            processor.readin_rnetwork_data_from_file(filename, 'rhyme_net')
-            filename = processor.get_filename_for_annotated_network_data('network', 'naive', 'mirrors')
-            processor.readin_rnetwork_data_from_file(filename, 'rhyme_net')
-            filename = processor.get_filename_for_annotated_network_data('network', 'naive', 'stelae')
-            processor.readin_rnetwork_data_from_file(filename, 'rhyme_net')
+            if run_lu1983_data:
+                filename = processor.get_filename_for_annotated_network_data('network', 'naive', 'received_shi')
+                processor.readin_rnetwork_data_from_file(filename, 'rhyme_net')
+            if run_mirror_data:
+                filename = processor.get_filename_for_annotated_network_data('network', 'naive', 'mirrors')
+                processor.readin_rnetwork_data_from_file(filename, 'rhyme_net')
+            if run_stelae_data:
+                filename = processor.get_filename_for_annotated_network_data('network', 'naive', 'stelae')
+                processor.readin_rnetwork_data_from_file(filename, 'rhyme_net')
         message2user('Done.', is_verbose)
     if pre_com_det_processing:
         processor.get_list_of_nodes_missing_schuessler_data()
@@ -2127,6 +2130,48 @@ class multi_dataset_processor:
         num_nodes = 0
         num_edges = 0
         nodes = []
+        #
+        # make one pass to add all nodes...
+        for fl in file_lines:
+            print(fl)
+            fl = fl.split(delim)
+            if len(fl) > 1:
+                if is_hanzi(fl[1]): # Edge
+                    if 0: # only adding nodes
+                        left_char = fl[0]
+                        right_char = fl[1]
+                        try:
+                            num_rhymes = fl[2]
+                        except:
+                            num_rhymes = -1
+                        try:
+                            rhyme_id = fl[3]
+                        except:
+                            rhyme_id = ''
+                        if is_verbose:
+                            print('EDGE: ' + left_char + delim + right_char + delim + str(num_rhymes) + delim + rhyme_id)
+                        #if not net.is_node_already_in_network(left_char):
+                        #    x = 1
+                        net.add_edge(left_char, right_char, num_rhymes, rhyme_id)
+                        num_edges += 1
+                else: # Node
+                    node = fl[0]
+                    try:
+                        stanza_inc = fl[1]
+                    except:
+                        stanza_inc = -1
+                    try:
+                        orig_line = fl[2]
+                    except:
+                        orig_line = ''
+                    if is_verbose:
+                        print('NODE: ' + node + delim + str(stanza_inc) + delim + orig_line)
+                    net.add_node(node, stanza_inc, orig_line)
+                    if node not in nodes:
+                        nodes.append(node)
+                        num_nodes += 1
+        #
+        # make second pass to add all edges
         for fl in file_lines:
             print(fl)
             fl = fl.split(delim)
@@ -2144,24 +2189,28 @@ class multi_dataset_processor:
                         rhyme_id = ''
                     if is_verbose:
                         print('EDGE: ' + left_char + delim + right_char + delim + str(num_rhymes) + delim + rhyme_id)
+                    #if not net.is_node_already_in_network(left_char):
+                    #    x = 1
                     net.add_edge(left_char, right_char, num_rhymes, rhyme_id)
                     num_edges += 1
                 else: # Node
-                    node = fl[0]
-                    try:
-                        stanza_inc = fl[1]
-                    except:
-                        stanza_inc = -1
-                    try:
-                        orig_line = fl[2]
-                    except:
-                        orig_line = ''
-                    if is_verbose:
-                        print('NODE: ' + node + delim + str(stanza_inc) + delim + orig_line)
-                    net.add_node(node, stanza_inc, orig_line)
-                    if node not in nodes:
-                        nodes.append(node)
-                        num_nodes += 1
+                    if 0: # only adding edges
+                        node = fl[0]
+                        try:
+                            stanza_inc = fl[1]
+                        except:
+                            stanza_inc = -1
+                        try:
+                            orig_line = fl[2]
+                        except:
+                            orig_line = ''
+                        if is_verbose:
+                            print('NODE: ' + node + delim + str(stanza_inc) + delim + orig_line)
+                        net.add_node(node, stanza_inc, orig_line)
+                        if node not in nodes:
+                            nodes.append(node)
+                            num_nodes += 1
+
         print(str(len(file_lines)) + ' lines in the file. ' + str(num_nodes) + ' nodes and ' + str(num_edges) + ' edges.')
 
     def do_not_reprocess_old_data(self):
@@ -2254,7 +2303,8 @@ class multi_dataset_processor:
     def create_pyvis_network_graph_for_mirrors_com_detected_data(self):
         funct_name = 'create_pyvis_network_graph_for_mirrors_com_detected_data()'
         print('Begin ' + funct_name)
-        com_det_file = os.path.join(filename_storage.get_hanproj_dir(), 'hanproject', 'com_detection_kyomeishusei2015_mirror_data_output.txt')
+        #com_det_file = os.path.join(filename_storage.get_hanproj_dir(), 'hanproject', 'com_detection_kyomeishusei2015_mirror_data_output.txt')
+        com_det_file = filename_storage.get_filename_for_combo_com_det_network_data()
         desired_groups = []
         mirror_rnet = self.get_network_object('network', 'naive', 'mirrors')
         mirror_rnet.create_pyvis_network_by_coloring_pre_com_det_data_w_com_det_groups('Pre-Com Det Mirror Data with Coloring', com_det_file, desired_groups)
@@ -2298,7 +2348,8 @@ class multi_dataset_processor:
         funct_name = 'create_pyvis_network_graph_for_received_shi_com_detected_data()'
         #com_det_file = os.path.join(get_hanproj_dir(), 'hanproject', 'com_detection_lu1983_received_shi_data_output.txt')
         #com_det_file = os.path.join(filename_storage.get_hanproj_dir(), 'hanproject', 'com_det_annotated_received-shi_graph_data.txt')
-        com_det_file = self.filename_storage.get_filename_for_com_det_network_data('graph', 'com_det', 'received_shi')
+        #com_det_file = self.filename_storage.get_filename_for_com_det_network_data('graph', 'com_det', 'received_shi')
+        com_det_file = filename_storage.get_filename_for_combo_com_det_network_data()
         desired_groups = []
         received_net = self.get_network_object('network', 'naive', 'received_shi')
         received_net.create_pyvis_network_by_coloring_pre_com_det_data_w_com_det_groups('Pre-Com Det Received Shi Data with Coloring', com_det_file, desired_groups)
@@ -2307,7 +2358,8 @@ class multi_dataset_processor:
         funct_name = 'create_pyvis_network_graph_for_stelae_com_detected_data()'
         #com_det_file = os.path.join(get_hanproj_dir(), 'hanproject',
         #                            'com_detection_mao_2008_stelae_data_output.txt')
-        com_det_file = os.path.join(filename_storage.get_hanproj_dir(), 'stelae', 'com_det_annotated_stelae_graph_data.txt')
+        #com_det_file = os.path.join(filename_storage.get_hanproj_dir(), 'stelae', 'com_det_annotated_stelae_graph_data.txt')
+        com_det_file = filename_storage.get_filename_for_combo_com_det_network_data()
         desired_groups = []
         stelae_rnet = self.get_network_object('network', 'naive', 'stelae')
         stelae_rnet.create_pyvis_network_by_coloring_pre_com_det_data_w_com_det_groups('Pre-Com Det Stelae Data with Coloring',
@@ -2315,7 +2367,8 @@ class multi_dataset_processor:
 
     def create_pyvis_network_graph_for_combined_com_detected_data(self):
         funct_name = 'create_pyvis_network_graph_for_combined_com_detected_data()'
-        com_det_file = filename_storage.get_filename_for_combined_data_community_detection()
+        #com_det_file = filename_storage.get_filename_for_combined_data_community_detection()
+        com_det_file = filename_storage.get_filename_for_combo_com_det_network_data()
         desired_groups = []
         rhyme_net = rhyme_net = self.get_network_object('network', 'naive', 'combo')
         rhyme_net.create_pyvis_network_by_coloring_pre_com_det_data_w_com_det_groups('Pre-Com Det Combo Data with Coloring',
@@ -2474,7 +2527,7 @@ class multi_dataset_processor:
 
     def create_network_for_combo_data_with_com_det_annotator(self):
         funct_name = 'create_network_for_combo_data_with_com_det_annotator()'
-        com_det_file = filename_storage.get_filename_for_combined_data_community_detection()
+        com_det_file = filename_storage.get_filename_for_combo_com_det_network_data()
         #com_det_file = get_com_det_group_descriptions_for_combo_data()
         if not os.path.isfile(com_det_file):
             print_debug_message(funct_name + ' ERROR: Community Detection Results file does NOT exist.',True)
@@ -2570,7 +2623,9 @@ class multi_dataset_processor:
                                # will be created with this function
         annotator_type = 'com_det'
         pyvis_net = self.initialize_pyvis_network(title)
-        com_det_file = filename_storage.get_filename_for_com_det_network_data(network_type, annotator_type, data_type)
+        #com_det_file = filename_storage.get_filename_for_com_det_network_data(network_type, annotator_type, data_type)
+        com_det_file = filename_storage.get_filename_for_combo_com_det_network_data()
+        #get_filename_for_combo_com_det_network_data
         #com_det_file = get_com_det_group_descriptions_for_combo_data()
         if not os.path.isfile(com_det_file):
             print_debug_message(funct_name + ' ERROR: Community Detection Results file does NOT exist.',True)
@@ -3152,30 +3207,20 @@ class multi_dataset_processor:
             if 'Lu1983.428' in k:
                 x = 1
                 continue
-
-            if 'Mou2008.045' in k:
-                continue
-
             if 'Mou2008.060' in k:
-                continue
-
-            if 'Mou2008.067' in k:
-                continue
-
-            if 'Mou2008.133' in k: # this one caused my IDE to run out of memory
-                continue
-
+                x = 1
             if 0:
-                if 'Mou2008.064' in k:
+                if 'Mou2008.045' in k:
                     continue
 
-
-                if 'Mou2008.080' in k:
+                if 'Mou2008.060' in k:
                     continue
 
-                if 'Mou2008.089' in k:
+                if 'Mou2008.067' in k:
                     continue
 
+                if 'Mou2008.133' in k: # this one caused my IDE to run out of memory
+                    continue
 
             if data_type == 'received_shi' or data_type == 'stelae':
                 poem = uniqid2poem_dict[k].get_poem_content_as_str()
@@ -3267,7 +3312,7 @@ class multi_dataset_processor:
 
                 #
                 #   For Schuessler Annotator
-                s_annotated_stan, s_rijm_lijst, rw2lhan_dict, rhyme2rw_list = stanza_proc.schuessler_annotate()
+                s_annotated_stan, s_rijm_lijst, rw2lhan_dict, rhyme2rw_list = stanza_proc.schuessler_annotate(k)
                 s_linc = 0
                 s_received_net = self.get_network_object('network', 'schuessler', 'received_shi')
                 for s_lijn in s_rijm_lijst:
@@ -3281,6 +3326,8 @@ class multi_dataset_processor:
                     append_line_to_utf8_file(schuessler_output, s_annotated_line)
 
                     if s_rijm:  # Add node
+                        if '寤' in s_rijm:
+                            x = 1
                         lhan = rw2lhan_dict[s_rijm]
                         rhyme = get_rhyme_from_schuessler_late_han_syllable(lhan)
                         plain_rw = s_rijm
@@ -3759,9 +3806,17 @@ class single_stele:
         return self.poem_content[:]
 
     def get_poem_content_as_str(self):
+        #use_old = False
+        #if use_old:
+        #    joiner = ' '
+        #    if '。' in ''.join(self.poem_content):
+        #        joiner = '。'
+        #    return joiner.join(self.poem_content)
+        #else:
         joiner = ' '
-        if '。' in ''.join(self.poem_content):
-            joiner = '。'
+        x = self.poem_content
+        if '。' in ''.join(self.poem_content): # this is a sign that the poem is not punctuated
+            joiner = ''
         return joiner.join(self.poem_content)
 
     def remove_last_line_of_poem_if_blank(self):
@@ -5444,20 +5499,23 @@ def process_all_data_sets():
         message2user('Running Pre-Com Det processing for Combined Data...', is_verbose)
         message2user(get_timestamp(), is_verbose)
         processor.do_not_reprocess_old_data()
-        message2user('Creating Post-Com Det network for Received Shi...', is_verbose)
-        filename = processor.get_filename_for_annotated_network_data('network', 'naive', 'received_shi')
-        processor.readin_rnetwork_data_from_file(filename, 'rhyme_net')
-        message2user('\tDone (' + str(get_timestamp()) + ').', is_verbose)
+        if run_lu1983_data:
+            message2user('Creating Post-Com Det network for Received Shi...', is_verbose)
+            filename = processor.get_filename_for_annotated_network_data('network', 'naive', 'received_shi')
+            processor.readin_rnetwork_data_from_file(filename, 'rhyme_net')
+            message2user('\tDone (' + str(get_timestamp()) + ').', is_verbose)
 
-        message2user('Creating Post-Com Det network for Mirrors...', is_verbose)
-        filename = processor.get_filename_for_annotated_network_data('network', 'naive', 'mirrors')
-        processor.readin_rnetwork_data_from_file(filename, 'rhyme_net')
-        message2user('\tDone (' + str(get_timestamp()) + ').', is_verbose)
+        if run_mirror_data:
+            message2user('Creating Post-Com Det network for Mirrors...', is_verbose)
+            filename = processor.get_filename_for_annotated_network_data('network', 'naive', 'mirrors')
+            processor.readin_rnetwork_data_from_file(filename, 'rhyme_net')
+            message2user('\tDone (' + str(get_timestamp()) + ').', is_verbose)
 
-        message2user('Creating Post-Com Det network for Stelae...', is_verbose)
-        filename = processor.get_filename_for_annotated_network_data('network', 'naive', 'stelae')
-        processor.readin_rnetwork_data_from_file(filename, 'rhyme_net')
-        message2user('\tDone (' + str(get_timestamp()) + ').', is_verbose)
+        if run_stelae_data:
+            message2user('Creating Post-Com Det network for Stelae...', is_verbose)
+            filename = processor.get_filename_for_annotated_network_data('network', 'naive', 'stelae')
+            processor.readin_rnetwork_data_from_file(filename, 'rhyme_net')
+            message2user('\tDone (' + str(get_timestamp()) + ').', is_verbose)
 
         message2user('Creating Post-Com Det network for Combo data...', is_verbose)
         processor.create_network_for_combo_data_with_com_det_annotator()
@@ -5596,8 +5654,45 @@ def test_annatator_comparison():
     message2user('\tDone (' + str(get_timestamp()) + ').', is_verbose)
     message2user('Done (' + str(get_timestamp()) + ').', is_verbose)
 
+def fix_issues_with_stelae_data():
+    funct_name = 'fix_issues_with_stelae_data()'
+    data_type = 'stelae'
+    stanza_proc = stanza_processor(data_type)
+    s_data = parse_mao_2008_stelae_data(is_verbose=True)
+    uniqid2poem_dict = s_data.get_uniq2data_dict()
+    every_line_rhymes = False
+    temp_file = 'debug_temp_naive.txt'
+    naive_output = 'debug_naive_output.txt'
+    delete_file_if_it_exists(temp_file)
+    delete_file_if_it_exists(naive_output)
+    for k in uniqid2poem_dict:  # lu1983_poem -- for each unique poem ID...
+        poem_num = int(k.split('.')[1])  # debug only
+        poem = uniqid2poem_dict[k].get_poem_content_as_str()
+        stanza_list = poem.split('。') # was
+        st_inc = 0
+        poem_id = uniqid2poem_dict[k].get_poem_id()
+        stanza_id = poem_id + '.' + str(st_inc)
+        # Process a single stanza
+        for stanza in stanza_list:
+            if not stanza.strip():
+                continue
+            stanza = convert_punctuation(stanza, data_type)
+            stanza_proc.input_stanza(stanza, stanza_id, every_line_rhymes)
+            if stanza.count(' ') > 0:  # this is a sign that the original poem wasn't punctuated (and therefore
+                #   should be skipped)
+                annotated_stan = []
+                rijm_lijst = []
+            else:
+                annotated_stan, rijm_lijst = stanza_proc.naively_annotate(temp_file)
+            #
+            if not annotated_stan:  # if there are no rhymes in the stanza...
+                append_line_to_output_file(naive_output, stanza_id + '： ' + stanza)
+                continue
+
+#fix_issues_with_stelae_data()
+
 #test_annatator_comparison()
-process_all_data_sets()
-#test_multi_dataset_processor() #-----
+#process_all_data_sets()
+test_multi_dataset_processor() #-----
 #test_list_of_chars_for_lhan_data()
 

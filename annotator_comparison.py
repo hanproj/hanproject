@@ -9,6 +9,7 @@ from PyQt5.QtGui import QColor
 import sys
 import os
 import re
+import copy
 from soas_network_utils import get_hanproj_dir
 from soas_network_utils import readlines_of_utf8_file
 from soas_rnetwork_test import delete_file_if_it_exists
@@ -20,6 +21,11 @@ from soas_network_utils import get_rhyme_groups_from_annotated_poem
 from soas_network_utils import exception_chars
 from soas_network_utils import if_file_exists
 from soas_network_utils import readin_most_complete_schuessler_data
+from soas_network_utils import is_poem_annotated
+from soas_network_utils import does_line_have_rhyme_marker
+from soas_network_utils import get_rhyme_word_and_marker_from_line_of_poem
+
+#rw, m = get_rhyme_word_and_marker_from_line_of_poem(p)
 
 #from soas_network_utils import readin_results_of_community_detection
 from soas_network_utils import readin_community_detection_group_descriptions
@@ -513,9 +519,9 @@ class Ui(QtWidgets.QMainWindow):
         self.textEdit.setText(msg)
 
     # data_type = 'naive', 'com_det' or 'schuessler'
-    def get_rhyme_groups_from_poem(self, poem):
+    def get_rhyme_groups_from_poem(self, poem, line_delim='\n'):
         funct_name ='get_rhyme_groups_from_poem()'
-        return get_rhyme_groups_from_annotated_poem(poem)
+        return get_rhyme_groups_from_annotated_poem(poem, line_delim)
 
     def load_current_poem(self):
         n_current_poem = self.p_data.get_current_naive_poem()
@@ -722,7 +728,7 @@ def test_readin_annotated_poem_data():
 
 def test_compare_data_sets():
     funct_name = 'test_compare_data_sets()'
-    data_type = 'received_shi'#'mirrors' #'stelae'#'received_shi'
+    data_type = 'stelae' #'stelae'#'received_shi'
     compare_annotation_between_different_annotators(data_type)
 
 def get_poem_base_id2poem_content_dict(poem_id2poem_line_d):
@@ -752,6 +758,18 @@ def get_poem_base_id2poem_content_dict(poem_id2poem_line_d):
     #print('*-' * 20)
     return retval
 
+def renumber_poems(data, data_type):
+    if data_type == 'mirrors' or data_type == 'stelae':
+        temp_d = {}
+        for poem_id in data:
+            new_poem_id = poem_id.split('.')
+            new_poem_id = new_poem_id[0] + '.' + new_poem_id[1]
+            if new_poem_id not in temp_d:
+                temp_d[new_poem_id] = ''
+            temp_d[new_poem_id] += data[poem_id]
+        return temp_d
+    return data
+
 def compare_annotation_between_different_annotators(data_type):
     funct_name = 'compare_annotation_between_different_annotators()'
     n_data = readin_annotated_poem_data('naive', data_type)
@@ -778,22 +796,29 @@ def compare_annotation_between_different_annotators(data_type):
     result2poem_id = {}
     r2n_index = ''
     no_rhymes = []
+    s_data = renumber_poems(s_data, data_type)
+    n_data = renumber_poems(n_data, data_type)
+    cd_data = renumber_poems(cd_data, data_type)
+    irregular_poems = []
+    poem_line_delim = '。'
     for poem_id in s_data:
         s_poem_content = s_data[poem_id]
         if '。' not in s_poem_content:
             x = 1
         else:
             x = 1
+        if '00058' in poem_id:
+            x = 1
         if 'Mou2008.118.1.3' in poem_id:
             x = 1
         if '01925' in poem_id:
             x = 1
         # get_rhyme_groups_from_annotated_poem() # per poem; input = poem content; returns: dict[marker] = [rw words]
-        s_m2rw_words_d = get_rhyme_groups_from_annotated_poem(s_poem_content)
+        s_m2rw_words_d = get_rhyme_groups_from_annotated_poem(s_poem_content, poem_line_delim)
         n_poem_content = n_data[poem_id]
-        n_m2rw_words_d = get_rhyme_groups_from_annotated_poem(n_poem_content)
+        n_m2rw_words_d = get_rhyme_groups_from_annotated_poem(n_poem_content, poem_line_delim)
         cd_poem_content = cd_data[poem_id]
-        cd_m2rw_words_d = get_rhyme_groups_from_annotated_poem(cd_poem_content)
+        cd_m2rw_words_d = get_rhyme_groups_from_annotated_poem(cd_poem_content, poem_line_delim)
         if not n_m2rw_words_d:
             line_out = 'N/A\tN/A\tN/A\t0'
             no_rhymes.append(poem_id)
@@ -802,37 +827,39 @@ def compare_annotation_between_different_annotators(data_type):
             num_naive_rhymes = len(n_m2rw_words_d['a'])
         except KeyError as ke:
             x = 1
+            irregular_poems.append(poem_id)
+            continue
         s2n_percent = get_percentage_similarity_to_naive_annotator(s_m2rw_words_d, num_naive_rhymes)  # per poem
         cd2n_percent = get_percentage_similarity_to_naive_annotator(cd_m2rw_words_d, num_naive_rhymes)
         line_out = poem_id + delim
         if s2n_percent == '100':
             #n_equal_s = True
             line_out += 'N=S' + delim
-            r2n_index += 'N=S;'
+            r2n_index += 'N=S; '
         else:
             line_out += 'N≠S (' + s2n_percent + ')' + delim
-            r2n_index += 'N≠S;'
+            r2n_index += 'N≠S; '
         if cd2n_percent == '100':
             line_out += 'N=C' + delim
-            r2n_index += 'N=C;'
+            r2n_index += 'N=C; '
         else:
             line_out += 'N≠C (' + cd2n_percent + ')' + delim
-            r2n_index += 'N≠C;'
+            r2n_index += 'N≠C; '
         if s2n_percent == cd2n_percent:
             if s2n_percent == '100':
                 line_out += 'S=C' + delim
-                r2n_index += 'S=C;'
+                r2n_index += 'S=C; '
             else:
                 s_equal_c = are_these_two_marker2rhyme_word_dictionaries_equal(s_m2rw_words_d, cd_m2rw_words_d)
                 if s_equal_c:
                     line_out += 'S=C' + delim
-                    r2n_index += 'S=C;'
+                    r2n_index += 'S=C; '
                 else:
                     line_out += 'S≠C' + delim
-                    r2n_index += 'S≠C'
+                    r2n_index += 'S≠C; '
         else:
             line_out += 'S≠C' + delim
-            r2n_index += 'S≠C'
+            r2n_index += 'S≠C; '
         if r2n_index not in result2num_instances_d:
             result2num_instances_d[r2n_index] = []
         result2num_instances_d[r2n_index].append(num_naive_rhymes)
@@ -874,6 +901,8 @@ def compare_annotation_between_different_annotators(data_type):
             print(msg)
         print(str(len(no_rhymes)) + ' poems have no rhymes.')
         print('\t' + ', '.join(no_rhymes))
+        print(str(len(irregular_poems)) + ' poems had irregularities and were not counted.')
+        print('\t' + ', '.join(irregular_poems))
         #result2num_instances_d[r2n_index].append(num_naive_rhymes)
 
 #
@@ -896,6 +925,8 @@ def are_these_two_marker2rhyme_word_dictionaries_equal(m2rw_a, m2rw_b):
             list_of_rw_lists_b = len2rw_b[num_rw]
         except IndexError as ie:
             return retval
+        except KeyError as ke:
+            return retval
         if len(list_of_rw_lists_a) != len(list_of_rw_lists_b):
             return retval
 
@@ -912,13 +943,14 @@ def test_print_out_poems_given_ids():
     print_out_poems_given_ids(data_type, ['Lu1983.047'])
 
 
-#
-# INPUT: poem as single string (lines end in '\n')
-def is_poem_annotated(poem):
-    return re.search(r'[a-zA-Zα-ωΑ-Ω]', poem)
+if 0:
+    #
+    # INPUT: poem as single string (lines end in '\n')
+    def is_poem_annotated(poem):
+        return re.search(r'[a-zA-Zα-ωΑ-Ω]', poem)
 
-def does_line_have_rhyme_marker(line):
-    return is_poem_annotated(line)
+    def does_line_have_rhyme_marker(line):
+        return is_poem_annotated(line)
 
 #
 # INPUT: poem as single string (lines end in '\n')
@@ -1112,7 +1144,37 @@ def convert_marker2rw_word_to_len2rw_word_dict(m2rw_word_d):
 
     #get_percentage_similarity_to_naive_annotator(marker2rw_list, num_naive_rhymes) # per poem
 
+def investigate_stelae_data():
+    data_type = 'stelae'
+    n_data = readin_annotated_poem_data('naive', data_type)
+    poems_in_data = []
+    for n in n_data:
+        print(n)
+        n = n.split('.')
+        poems_in_data.append(int(n[1]))
+    print(str(len(list(set(poems_in_data)))) + ' poems in data.')
 
+
+def investigate_mirror_data():
+    data_type = 'mirrors'
+    n_data = readin_annotated_poem_data('naive', data_type)
+    poems_in_data = []
+    for n in n_data:
+        print(n)
+        n = n.split('.')
+        poems_in_data.append(int(n[1]))
+    print(str(len(list(set(poems_in_data)))) + ' poems in data.')
+    not_accounted_for = []
+    not_accounted_for_str = []
+    #for pid in poems_in_data:
+    for inc in range(1,11817+1,1):
+        if inc not in poems_in_data:
+            not_accounted_for.append(inc)
+            not_accounted_for_str.append(str(inc))
+    for naf in not_accounted_for:
+        print(str(naf))
+    print(str(len(not_accounted_for)) + ' poems not accounted for.')
+    print(', '.join(not_accounted_for_str))
 # returns dictionary where:
 #    key = rhyme group marker
 #  value = list of rhyme words
@@ -1138,6 +1200,38 @@ def get_percentage_similarity_to_naive_annotator(marker2rw_list, num_naive_rhyme
     # Step 2: Calculate % similarity
     return str(int(round(100.0*float(max_num_rws)/float(num_naive_rhymes))))
 
+def annotate_possible_readings_for_poems():
+    funct_name = 'annotate_possible_readings_for_poems()'
+    s_data = readin_annotated_poem_data('com_det', 'stelae')
+    rw2lhan_d = readin_most_complete_schuessler_data()
+    poems_to_print = ['045', '060', '067', '133']
+    for sd in s_data:
+        tag = sd.split('.')[1]
+        if does_line_have_rhyme_marker(s_data[sd]):
+            rw, m = get_rhyme_word_and_marker_from_line_of_poem(s_data[sd])
+            lhan = ''
+            if rw in rw2lhan_d:
+                lhan = rw2lhan_d[rw]
+            if tag in poems_to_print:
+                print(sd + ': ' + s_data[sd] + ' ' + ', '.join(lhan))
+        else:
+            if tag in poems_to_print:
+                print(sd + ': ' + s_data[sd])
+        #else:
+        #    print(s_data[sd])
+
+def remove_dupes_from_schuessler():
+    funct_name = 'remove_dupes_from_schuessler()'
+    rw2lhan_d = readin_most_complete_schuessler_data()
+    entries_w_dupes = []
+    for rw in rw2lhan_d:
+        if len(rw2lhan_d[rw]) != len(list(set(rw2lhan_d[rw]))):
+            print(rw + ': ' + ' '.join(rw2lhan_d[rw]))
+            entries_w_dupes.append(rw)
+    #print(str(len(entries_w_dupes)) + ' entries have dupes.')
+
+
+
 run_gui = False
 if run_gui:
     if __name__ == "__main__":
@@ -1149,3 +1243,8 @@ else:
         test_compare_data_sets()
     #test_readin_annotated_poem_data()
     #test_print_out_poems_given_ids()
+
+#remove_dupes_from_schuessler()
+#annotate_possible_readings_for_poems()
+#investigate_stelae_data()
+#investigate_mirror_data()

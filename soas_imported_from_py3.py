@@ -9,6 +9,9 @@ utf8_bom_b = b'\xef\xbb\xbf'
 py_filename = 'py3_middle_chinese.py'
 gy_dict = {}
 
+str2hex_num_dict = {'0':0x0, '1':0x1, '2':0x2, '3':0x3, '4':0x4, '5':0x5, '6':0x6, '7':0x7, '8':0x8, '9':0x9,
+                    'a':0xa, 'b':0xb, 'c':0xc, 'd':0xd, 'e':0xe, 'f':0xf}
+
 def get_python_dir():
     return os.path.join('C:' + os.sep + 'Ash', 'research', 'code', 'python')
 
@@ -179,6 +182,14 @@ def get_normal_char_given_compatibility_char(entry):
     retval = entry
     if entry in compat2normal_dict:
         retval = compat2normal_dict[entry]
+    return retval
+
+def get_data_from_pos(string, position, delim):
+    try:
+        retval = string.split(delim, position + 1)[int(position)]
+    except IndexError as ie_err:
+        print(ie_err)
+        retval = -1
     return retval
 
 compat2normal_dict = {}
@@ -467,6 +478,24 @@ def readlines_of_utf8_file(filename):
         line = line.replace('\n', '')
         retval.append(line)
     return retval
+
+def convert_stringnum2hexnum(str_num):
+    return str2hex_num_dict[str_num.lower()]
+
+def convert_2byte_ncr_to_unicode_char(mstr):
+    funct_name = 'convert_2byte_ncr_to_unicode_char()'
+    if len(mstr) != 4:
+        print(funct_name + ' ERROR: expected sring of length 4, got length = ' + len(mstr) + ' (' + mstr + ')')
+        return 0x0
+    hob = convert_stringnum2hexnum(mstr[0])
+    s_hob = convert_stringnum2hexnum(mstr[1])
+    t_hob = convert_stringnum2hexnum(mstr[2])
+    lob = convert_stringnum2hexnum(mstr[3])
+    retval = (hob << 12)
+    retval += (s_hob << 8)
+    retval += (t_hob << 4)
+    retval += lob
+    return chr(retval)
 
 #test_get_mc_data_for_char()
 #test_readin_guangyun_zi_data()
