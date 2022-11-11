@@ -1536,8 +1536,6 @@ def readin_lu_1983_data(is_verbose=False):
     for l in line_list:
         if is_verbose:
             print(l)
-        if '彭子陽歌' in l:
-            x = 1
         l = l.split('\t')
         unique_id = l[0]
         l = l[1:len(l)]
@@ -1917,15 +1915,15 @@ def test_multi_dataset_processor():
     message2user('Starting multi_dataset_processor()...', is_verbose)
     processor = multi_dataset_processor(is_verbose)#, delete_old_data)
     message2user('Done.', is_verbose)
-    run_lu1983_data = True
+    run_lu1983_data = False
     run_mirror_data = True
-    run_stelae_data = True
-    run_combined_data = True
+    run_stelae_data = False
+    run_combined_data = False
 
     is_verbose = False
     run_test = False
 
-    pre_com_det_processing = False # False: post com det processing
+    pre_com_det_processing = True # False: post com det processing
 
     if run_lu1983_data:
         message2user('Running Received Shi Data...', is_verbose)
@@ -3207,7 +3205,7 @@ class multi_dataset_processor:
             if 'Lu1983.428' in k:
                 x = 1
                 continue
-            if 'Mou2008.060' in k:
+            if 'Lu1983.154' in k or 'Lu1983.478' in k:
                 x = 1
             if 0:
                 if 'Mou2008.045' in k:
@@ -3670,6 +3668,14 @@ def readin_kyomeishusei2015_han_mirror_data():
                 except IndexError as ie:
                     x = 1
                 inscription = remove_num_from_end_of_str_if_there_is_one(inscription)
+                # replace all ・ with □
+                inscription = inscription.replace('・', '□')
+                if '(註)' in inscription:
+                    inscription = inscription.split('(註)')[0]
+                if '；' in inscription:
+                    inscription = inscription.split('；')[0]
+                if '，｢半圓方形帶」' in inscription:
+                    inscription = inscription.split('，｢半圓方形帶」')[0] + '。'
                 if any_kana_in_string(inscription):
                     continue
 
@@ -3693,6 +3699,8 @@ def readin_kyomeishusei2015_han_mirror_data():
                 line_out = unique_id + delim + orig_id + delim + inscription_name + delim + name_in_source + delim
                 line_out += data_source + delim + physical_info + delim + inscription + delim + commentary
                 append_line_to_utf8_file(output_file, line_out)
+                #if '00136' in unique_id:
+                #    x = 1
                 unique_id = ''
                 orig_id = ''
                 inscription_name = ''
@@ -5557,8 +5565,6 @@ def convert_punctuation(line, data_type):
         if line.count('、') > 1:
             line = line.replace('、', '。')
     elif data_type == 'stelae':
-#        if '。 。' in line:
-#            line = line.replace('。 。', '。')
         if '。' in line:
             line_split = line.split('。')
             retval = []
@@ -5568,8 +5574,6 @@ def convert_punctuation(line, data_type):
             line = '。'.join(retval)
         if '，' in line:
             line = line.replace('，', '。')
-    #if '，' in line:
-    #    line = line.replace('，', '。')
     return line
 
 def characterize_stelae_punctuation():
@@ -5646,13 +5650,15 @@ def test_annatator_comparison():
     message2user('\tFor received shi...', is_verbose)
     compare_annotation_between_different_annotators('received_shi')
     message2user('\tDone (' + str(get_timestamp()) + ').', is_verbose)
-    message2user('\tFor mirrors...', is_verbose)
-    compare_annotation_between_different_annotators('mirrors')
-    message2user('\tDone (' + str(get_timestamp()) + ').', is_verbose)
-    message2user('\tFor stelae...', is_verbose)
-    compare_annotation_between_different_annotators('stelae')
-    message2user('\tDone (' + str(get_timestamp()) + ').', is_verbose)
-    message2user('Done (' + str(get_timestamp()) + ').', is_verbose)
+
+    if 0:
+        message2user('\tFor mirrors...', is_verbose)
+        compare_annotation_between_different_annotators('mirrors')
+        message2user('\tDone (' + str(get_timestamp()) + ').', is_verbose)
+        message2user('\tFor stelae...', is_verbose)
+        compare_annotation_between_different_annotators('stelae')
+        message2user('\tDone (' + str(get_timestamp()) + ').', is_verbose)
+        message2user('Done (' + str(get_timestamp()) + ').', is_verbose)
 
 def fix_issues_with_stelae_data():
     funct_name = 'fix_issues_with_stelae_data()'
@@ -5689,10 +5695,8 @@ def fix_issues_with_stelae_data():
                 append_line_to_output_file(naive_output, stanza_id + '： ' + stanza)
                 continue
 
-#fix_issues_with_stelae_data()
-
 #test_annatator_comparison()
-#process_all_data_sets()
-test_multi_dataset_processor() #-----
+process_all_data_sets()
+#test_multi_dataset_processor() #-----
 #test_list_of_chars_for_lhan_data()
 

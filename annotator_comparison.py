@@ -775,7 +775,7 @@ def compare_annotation_between_different_annotators(data_type):
     n_data = readin_annotated_poem_data('naive', data_type)
     s_data = readin_annotated_poem_data('schuessler', data_type)
     cd_data = readin_annotated_poem_data('com_det', data_type)
-
+    poems_accounted_for = [] # debug
     if data_type == 'received_shi':
         n_data = get_poem_base_id2poem_content_dict(n_data) # id2poem_d
         s_data = get_poem_base_id2poem_content_dict(s_data) # id2poem_d
@@ -867,6 +867,7 @@ def compare_annotation_between_different_annotators(data_type):
         if r2n_index not in result2poem_id:
             result2poem_id[r2n_index] = []
         result2poem_id[r2n_index].append(poem_id)
+        poems_accounted_for.append(poem_id)  # debug
         r2n_index = ''
         line_out += str(num_naive_rhymes)
         if num_naive_rhymes not in num_rhymes2data_d:
@@ -904,6 +905,19 @@ def compare_annotation_between_different_annotators(data_type):
         print(str(len(irregular_poems)) + ' poems had irregularities and were not counted.')
         print('\t' + ', '.join(irregular_poems))
         #result2num_instances_d[r2n_index].append(num_naive_rhymes)
+            #print(str(inc))
+        not_sure = []
+        for inc in range(1, 11817+1, 1): # irregular_poems, no_rhymes, poems_accounted_for
+            poem_id = 'kyomeishusei2015.' + str(inc).zfill(5)
+            if poem_id not in no_rhymes and poem_id not in poems_accounted_for and poem_id not in irregular_poems:
+                not_sure.append(poem_id)
+        print(str(len(irregular_poems)) + ' in irregular_poems.')
+        print(str(len(no_rhymes)) + ' in no_rhymes.')
+        print(str(len(poems_accounted_for)) + ' in poems_accounted_for.')
+        print('Poems we aren\'t sure about: ' + str(len(not_sure)))
+        print('\t' + ', '.join(not_sure))
+
+
 
 #
 # Purpose:
@@ -1248,3 +1262,5 @@ else:
 #annotate_possible_readings_for_poems()
 #investigate_stelae_data()
 #investigate_mirror_data()
+
+#compare_annotation_between_different_annotators('mirrors')
